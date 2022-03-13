@@ -90,12 +90,18 @@ export class coreBroker {
             _terminate: this.iforkableTerminate
         });
 
+        Interface.add( this, exports.IMqttClient, {
+            _class: this._class,
+            _module: this.module,
+            _name: this.name
+        });
+
         Interface.add( this, exports.IRunFile, {
             runDir: this.irunfileRunDir
         });
 
         Interface.add( this, exports.IServiceable, {
-            class: this.iserviceableClass,
+            class: this._class,
             cleanupAfterKill: this.iserviceableCleanupAfterKill,
             getCheckStatus: this.iserviceableGetCheckStatus,
             helloMessage: this.iserviceableHelloMessage,
@@ -121,6 +127,10 @@ export class coreBroker {
         return this;
     }
 
+    _class(){
+        return this.constructor.name;
+    }
+
     /*
      * Terminates the child process
      * @returns {Promise} which resolves when the process is actually about to terminate (only waiting for this Promise)
@@ -138,16 +148,6 @@ export class coreBroker {
     irunfileRunDir(){
         this.api().exports().Msg.debug( 'coreBroker.irunfileRunDir()' );
         return this.api().coreConfig().runDir();
-    }
-
-    /*
-     * @returns {String} the type of the service, not an identifier, rather a qualifier
-     *  For example, the implementation class name is a good choice
-     * [-implementation Api-]
-     */
-    iserviceableClass(){
-        this.api().exports().Msg.debug( 'coreBroker.iserviceableClass()' );
-        return this.constructor.name;
     }
 
     /*
@@ -205,6 +205,7 @@ export class coreBroker {
             .then(() => { Msg.debug( 'coreBroker.iserviceableStart() tcpServer created' ); })
             .then(() => { return this.IMqttServer.create( this._messagingPort ); })
             .then(() => { Msg.debug( 'coreBroker.iserviceableStart() mqttServer created' ); })
+            .then(() => { this.IMqttClient.advertise({ port:this._messagingPort, reconnectPeriod:5*1000 }); })
             .then(() => { return new Promise(() => {}); });
     }
 
@@ -303,7 +304,7 @@ export class coreBroker {
      *  A minimum of structure is so required, described in run-status.schema.json.
      */
     status(){
-        const _serviceName = this.api().service().name();
+        const _serviceName = this.name();
         this.api().exports().Msg.debug( 'coreBroker.status()', 'serviceName='+_serviceName );
         const self = this;
         let status = {};
@@ -321,8 +322,8 @@ export class coreBroker {
         const _runStatus = function(){
             return new Promise(( resolve, reject ) => {
                 const o = {
-                    module: self.api().service().package().getFullName(),
-                    class: self.constructor.name,
+                    module: self.module(),
+                    class: self._class(),
                     pids: [ process.pid ],
                     ports: [ self._tcpPort, self._messagingPort ],
                     status: status[_serviceName].ITcpServer.status
@@ -402,8 +403,8 @@ export class coreBroker {
             Msg.debug( 'coreBroker.terminate() returning as already stopped' );
             return Promise.resolve( true );
         }
-        const _name = this.api().service().name();
-        const _module = this.api().service().module();
+        const _name = this.name();
+        const _module = this.module();
         this._forwardPort = words && words[0] && self.api().exports().utils.isInt( words[0] ) ? words[0] : 0;
 
         const self = this;
@@ -414,13 +415,14 @@ export class coreBroker {
         let _promise = Promise.resolve( true )
             .then(() => {
                 if( cb && typeof cb === 'function' ){
-                    cb({ name:_name, module:_module, class:self.constructor.name, pid:process.pid, port:self._tcpPort });
+                    cb({ name:_name, module:_module, class:self._name(), pid:process.pid, port:self._tcpPort });
                 }
                 return self.ITcpServer.terminate();
             })
             .then(() => {
                 // we auto-remove from runfile as late as possible
                 //  (rationale: no more runfile implies that the service is no more testable and expected to be startable)
+                self.IMqttClient.terminate();
                 self.IRunFile.remove( _name );
                 this.api().exports().Msg.info( _name+' coreBroker terminating with code '+process.exitCode );
                 return Promise.resolve( true)
