@@ -1,0 +1,33 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/iztiar/iztiar-core/schemas/controller-config.schema.json",
+    "title": "brokerConfig",
+    "description": "the configuration of the coreBroker",
+    "type": "object",
+    "patternProperties" : {
+        "^[a-zA-Z][a-zA-Z0-9-_]*$": {
+            "type": "object",
+            "description": "the name of the service",
+            "properties": {
+                "module": {
+                    "type": "string",
+                    "description": "the name of the module which provides the service, or 'core'"
+                },
+                "class": {
+                    "type": "string",
+                    "description": "the name of the class or type or something inside the module, which qualifies the service type, may be set to 'coreBroker'"
+                },
+                "listenPort": {
+                    "type": "integer",
+                    "description": "TCP listening port number for internal service management",
+                    "default": 24002
+                },
+                "messagingPort": {
+                    "type": "integer",
+                    "description": "Messaging port number",
+                    "default": 24003
+                }
+            }
+        }
+    }
+}
