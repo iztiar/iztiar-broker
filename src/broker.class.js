@@ -106,11 +106,12 @@ export class coreBroker {
 
         Interface.add( this, exports.ITcpServer, {
             _execute: this.itcpserverExecute,
-            _listening: this.itcpserverListening
+            _listening: this.itcpserverListening,
+            _statsUpdated: this.itcpserverStatsUpdated
         });
 
         Interface.add( this, IMqttServer, {
-            _api: this.imqttserverApi
+            _api: this.api
         });
 
         // must be determined at construction time to be available when initializing IServiceable instance
@@ -128,14 +129,6 @@ export class coreBroker {
     iforkableTerminate(){
         this.api().exports().Msg.debug( 'coreBroker.iforkableTerminate()' );
         return this.terminate();
-    }
-
-    /*
-     * @returns {coreApi} the core API provided at module initialization
-     * [-implementation Api-]
-     */
-    imqttserverApi(){
-        return this.api();
     }
 
     /*
@@ -287,6 +280,17 @@ export class coreBroker {
             self.IRunFile.set( _name, status );
             self.IForkable.advertiseParent( status );
         });
+    }
+
+    /*
+     * Internal stats have been modified
+     * [-implementation Api-]
+     */
+    itcpserverStatsUpdated(){
+        this.api().exports().Msg.debug( 'coreBroker.itcpserverStatsUpdated()' );
+        const _name = this.api().service().name();
+        const _status = this.ITcpServer.status();
+        this.IRunFile.set([ _name, 'ITcpServer' ], _status );
     }
 
     /**
