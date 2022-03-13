@@ -415,7 +415,7 @@ export class coreBroker {
         let _promise = Promise.resolve( true )
             .then(() => {
                 if( cb && typeof cb === 'function' ){
-                    cb({ name:_name, module:_module, class:self._name(), pid:process.pid, port:self._tcpPort });
+                    cb({ name:_name, module:_module, class:self._class(), pid:process.pid, port:self._tcpPort });
                 }
                 return self.ITcpServer.terminate();
             })
