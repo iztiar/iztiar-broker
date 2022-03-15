@@ -203,6 +203,6 @@ export class IMqttServer {
                 return Promise.resolve( true );
             });
 
-        return _promise;
+        return promise;
     }
 }

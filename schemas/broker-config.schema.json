@@ -22,10 +22,21 @@
                     "description": "TCP listening port number for internal service management",
                     "default": 24002
                 },
-                "messagingPort": {
-                    "type": "integer",
-                    "description": "Messaging port number",
-                    "default": 24003
+                "messaging": {
+                    "type": "object",
+                    "description": "options for the messaging service, mandatory to manage the messaging bus",
+                    "properties": {
+                        "port": {
+                            "type": "integer",
+                            "description": "the port number of the message bus",
+                            "default": 24003
+                        },
+                        "alivePeriod": {
+                            "type": "integer",
+                            "description": "interval (ms) between two alive publications, defaulting to 1mn",
+                            "default": 60000
+                        }
+                    }
                 }
             }
         }

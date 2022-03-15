@@ -7,10 +7,12 @@
 import { coreBroker } from './imports.js';
 
 /**
- * @param {coreApi} api
+ * @param {engineApi} api the engine API as described in engine-api.schema.json
+ * @param {featureCard} card a description of this feature
  * @returns {Promise} which must resolves to an IServiceable instance
  */
-export default ( api ) => {
+export default ( api, card ) => {
     //console.log( '@iztiar/iztiar-broker default exported function()' );
-    return new coreBroker( api ).IServiceable;
+    //console.log( api );
+    return new coreBroker( api, card ).then(( o ) => { return o.IServiceable; });
 }
