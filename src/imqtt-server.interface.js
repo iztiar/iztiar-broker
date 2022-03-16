@@ -15,6 +15,9 @@ export class IMqttServer {
         STOPPED: 'stopped'
     };
 
+    // implementation instance
+    _instance = null;
+
     // messaging subserver
     _aedesServer = null;
 
@@ -28,10 +31,13 @@ export class IMqttServer {
     _status = null;
 
     /**
-     * @constructor
+     * Constructor
+     * @param {*} instance the implementation instance
      * @returns {IMqttServer}
      */
-     constructor(){
+     constructor( instance ){
+        instance.api().exports().Msg.debug( 'IMqttServer instanciation' );
+        this._instance = instance;
         this._status = IMqttServer.s.STOPPED;
         return this;
     }
@@ -41,19 +47,11 @@ export class IMqttServer {
        *** *************************************************************************************** */
 
     /**
-     * @returns {coreApi} the core API provided at module initialization
-     * [-implementation Api-]
-     */
-    _api(){
-        return null;
-    }
-
-    /**
      * What to do when this IMqttServer is ready listening ?
      * [-implementation Api-]
      */
     _listening(){
-        this._api().exports().Msg.debug( 'IMqttServer._listening()' );
+        this._instance.api().exports().Msg.debug( 'IMqttServer._listening()' );
     }
 
     /* *** ***************************************************************************************
@@ -68,7 +66,7 @@ export class IMqttServer {
      * [-public API-]
      */
     create( port ){
-        const Msg = this._api().exports().Msg;
+        const Msg = this._instance.api().exports().Msg;
         Msg.debug( 'IMqttServer.create()' );
         this.status( IMqttServer.s.STARTING );
         this._mqttPort = port;
@@ -105,7 +103,7 @@ export class IMqttServer {
      * @param {Error} e exception on MQTT server listening
      */
     errorHandler( e ){
-        const Msg = this._api().exports().Msg;
+        const Msg = this._instance.api().exports().Msg;
         Msg.debug( 'IMqttServer:errorHandler()' );
         if( e.stack ){
             Msg.error( 'IMqttServer:errorHandler()', e.name, e.message );
@@ -129,7 +127,7 @@ export class IMqttServer {
      * @returns {Object} the status of the IMqttServer
      */
     status( newStatus ){
-        const Msg = this._api().exports().Msg;
+        const Msg = this._instance.api().exports().Msg;
         Msg.debug( 'IMqttServer.status()', 'status='+this._status, 'newStatus='+newStatus );
         if( newStatus && typeof newStatus === 'string' && newStatus.length && Object.values( IMqttServer.s ).includes( newStatus )){
             this._status = newStatus;
@@ -147,7 +145,7 @@ export class IMqttServer {
      * @returns {Promise} which resolves when the server is actually closed
      */
     terminate(){
-        const Msg = this._api().exports().Msg;
+        const Msg = this._instance.api().exports().Msg;
         Msg.debug( 'IMqttServer.terminate()' );
         if( this.status().status === IMqttServer.s.STOPPING ){
             Msg.debug( 'IMqttServer.terminate() returning as already stopping' );

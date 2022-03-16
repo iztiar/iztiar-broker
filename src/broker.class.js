@@ -24,51 +24,21 @@ export class coreBroker {
      *   > endConnection {Boolean} whether the server should close the client connection
      *      alternative being to wait for the client closes itself its own connection
      */
-     static c = {
-        'iz.ping': {
-            label: 'ping the service',
-            fn: coreBroker._izPing,
-            endConnection: false
-        },
+     static verbs = {
         'iz.status': {
             label: 'returns the status of this coreBroker service',
-            fn: coreBroker._izStatus,
-            endConnection: false
+            fn: coreBroker._izStatus
         },
         'iz.stop': {
             label: 'stop this coreBroker service',
             fn: coreBroker._izStop,
-            endConnection: true
+            end: true
         }
     };
-
-    /**
-     * The provided capabilities
-     */
-    static caps = {
-        'broker': function( o ){
-            return o.IRunFile.get( o.feature().name(), 'helloMessage' );
-        },
-        'checkStatus': function( o ){
-            return o._checkStatus();
-        },
-        'helloMessage': function( o, cap ){
-            return o.IRunFile.get( o.feature().name(), cap );
-        },
-        'tcpServer': function( o ){
-            return o.IRunFile.get( o.feature().name(), 'ITcpServer' );
-        }
-    };
-
-    // ping -> ack: the port is alive
-    static _izPing( o, reply ){
-        reply.answer = 'iz.ack';
-        return Promise.resolve( reply );
-    }
 
     // returns the full status of the server
-    static _izStatus( o, reply ){
-        return o.status()
+    static _izStatus( self, reply ){
+        return self.status()
             .then(( status ) => {
                 reply.answer = status;
                 return Promise.resolve( reply );
@@ -76,10 +46,10 @@ export class coreBroker {
     }
 
     // terminate the server and its relatives (broker, managed, plugins)
-    static _izStop( o, reply ){
-        o.terminate( reply.args, ( res ) => {
+    static _izStop( self, reply ){
+        self.terminate( reply.args, ( res ) => {
             reply.answer = res;
-            o.api().exports().Msg.debug( 'coreBroker.izStop()', 'replying with', reply );
+            self.api().exports().Msg.debug( 'coreBroker.izStop()', 'replying with', reply );
             return Promise.resolve( reply );
         });
     }
@@ -100,12 +70,24 @@ export class coreBroker {
         Interface.extends( this, exports.baseService, api, card );
         Msg.debug( 'coreBroker instanciation' );
 
+        // first interface to be added, so that other interfaces may take advantage of that
+        Interface.add( this, exports.ICapability );
+
+        this.ICapability.add(
+            'checkStatus', ( o ) => { return o._checkStatus(); }
+        );
+        this.ICapability.add(
+            'broker', ( o ) => { return Promise.resolve( o.IRunFile.get( o.feature().name(), 'helloMessage' )); }
+        );
+        this.ICapability.add(
+            'helloMessage', ( o, cap ) => { return Promise.resolve( o.IRunFile.get( o.feature().name(), cap )); }
+        );
+
         Interface.add( this, exports.IForkable, {
             _terminate: this.iforkableTerminate
         });
 
         Interface.add( this, exports.IMqttClient, {
-            _capabilities: this._capabilities,
             _class: this._class,
             _module: this.feature().module,
             _name: this._name
@@ -116,10 +98,8 @@ export class coreBroker {
         });
 
         Interface.add( this, exports.IServiceable, {
-            capabilities: this._capabilities,
             class: this._class,
             config: this.iserviceableConfig,
-            get: this.iserviceableGet,
             killed: this.iserviceableKilled,
             start: this.iserviceableStart,
             status: this.iserviceableStatus,
@@ -127,14 +107,12 @@ export class coreBroker {
         });
 
         Interface.add( this, exports.ITcpServer, {
-            _execute: this.itcpserverExecute,
             _listening: this.itcpserverListening,
-            _statsUpdated: this.itcpserverStatsUpdated
+            _statsUpdated: this.itcpserverStatsUpdated,
+            _verbs: this.itcpserverVerbs
         });
 
-        Interface.add( this, IMqttServer, {
-            _api: this.api
-        });
+        Interface.add( this, IMqttServer );
 
         let _promise = Promise.resolve( true )
             .then(() => { return this._filledConfig(); })
@@ -142,14 +120,6 @@ export class coreBroker {
             .then(() => { return Promise.resolve( this ); });
 
         return _promise;
-    }
-
-    /*
-     * @returns {String[]} the array of service capabilities
-     * [-implementation Api-]
-     */
-    _capabilities(){
-        return Object.keys( coreBroker.caps );
     }
 
     /*
@@ -235,41 +205,12 @@ export class coreBroker {
     }
 
     /*
-     * @param {String} cap the desired capability name
-     * @returns {Object} the capability characterics 
-     * [-implementation Api-]
-     */
-    iserviceableGet( cap ){
-        const Msg = this.api().exports().Msg;
-        Msg.debug( 'coreBroker.iserviceableGet() cap='+cap );
-        if( Object.keys( coreBroker.caps ).includes( cap )){
-            return coreBroker.caps[cap]( this, cap );
-        } else {
-            Msg.error( 'coreBroker unknown capability \''+cap+'\'' );
-            return null;
-        }
-    }
-
-    /*
      * If the service had to be SIGKILL'ed to be stoppped, then gives it an opportunity to make some cleanup
      * [-implementation Api-]
      */
     iserviceableKilled(){
         this.api().exports().Msg.debug( 'coreBroker.iserviceableKilled()' );
         this.IRunFile.remove( this.feature().name());
-    }
-
-    /*
-     * @returns {String} the helloMessage from the runfile (if any)
-     * [-implementation Api-]
-     */
-    iserviceableHelloMessage(){
-        const _name = this.feature().name();
-        const _json = this.IRunFile.jsonByName( _name );
-        if( _json && _json[_name].helloMessage ){
-            return _json[_name].helloMessage;
-        }
-        return null;
     }
 
     /*
@@ -323,26 +264,6 @@ export class coreBroker {
     }
 
     /*
-     * Execute a received commands and replies with an answer
-     * @param {String[]} words the received command and its arguments
-     * @param {Object} client the client connection
-     * @returns {Boolean} true if we knew the command and (at least tried) execute it
-     * [-implementation Api-]
-     */
-    itcpserverExecute( words, client ){
-        const self = this;
-        let reply = this.ITcpServer.findExecuter( words, coreBroker.c );
-        //console.log( reply );
-        if( reply ){
-            reply.obj.fn( this, reply.answer )
-                .then(( result ) => {
-                    self.ITcpServer.answer( client, result, reply.obj.endConnection );
-                });
-        }
-        return reply;
-    }
-
-    /*
      * What to do when this ITcpServer is ready listening ?
      *  -> write the runfile before advertising parent to prevent a race condition when writing the file
      *  -> send the current service status
@@ -372,6 +293,15 @@ export class coreBroker {
         const _name = this.feature().name();
         const _status = this.ITcpServer.status();
         this.IRunFile.set([ _name, 'ITcpServer' ], _status );
+    }
+
+    /*
+     * @returns {Object[]} the list of implemented commands provided by the interface implementation
+     *  cf. tcp-server-command.schema.json
+     * [-implementation Api-]
+     */
+    itcpserverVerbs(){
+        return coreBroker.verbs;
     }
 
     /**
@@ -474,7 +404,8 @@ export class coreBroker {
      *  this terminate() function. So, try to prevent a double execution.
      */
     terminate( words=[], cb=null ){
-        this.api().exports().Msg.debug( 'coreBroker.terminate()' );
+        const Msg = this.api().exports().Msg;
+        Msg.debug( 'coreBroker.terminate()' );
         const _status = this.ITcpServer.status();
         if( _status.status === this.api().exports().ITcpServer.s.STOPPING ){
             Msg.debug( 'coreBroker.terminate() returning as currently stopping' );
@@ -506,7 +437,7 @@ export class coreBroker {
                 self.IMqttClient.terminate();
                 self.IMqttServer.terminate();
                 self.IRunFile.remove( _name );
-                this.api().exports().Msg.info( _name+' coreBroker terminating with code '+process.exitCode );
+                Msg.info( _name+' coreBroker terminating with code '+process.exitCode );
                 return Promise.resolve( true)
                 //process.exit();
             });
