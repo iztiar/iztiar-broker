@@ -273,9 +273,10 @@ export class coreBroker {
      * What to do when this ITcpServer is ready listening ?
      *  -> write the runfile before advertising parent to prevent a race condition when writing the file
      *  -> send the current service status
+     * @param {Object} tcpServerStatus
      * [-implementation Api-]
      */
-    itcpserverListening(){
+    itcpserverListening( tcpServerStatus ){
         const exports = this.api().exports();
         exports.Msg.debug( 'coreBroker.itcpserverListening()' );
         const self = this;
@@ -285,7 +286,8 @@ export class coreBroker {
         this.status().then(( status ) => {
             status[_name].event = 'startup';
             status[_name].helloMessage = _msg;
-            status[_name].status = this.ITcpServer.status().status;
+            status[_name].status = 'running';
+            //console.log( 'itcpserverListening() status', status );
             self.IRunFile.set( _name, status );
             self.IForkable.advertiseParent( status );
         });
@@ -293,13 +295,13 @@ export class coreBroker {
 
     /*
      * Internal stats have been modified
+     * @param {Object} status of the ITcpServer
      * [-implementation Api-]
      */
-    itcpserverStatsUpdated(){
+    itcpserverStatsUpdated( status ){
         this.api().exports().Msg.debug( 'coreBroker.itcpserverStatsUpdated()' );
         const _name = this.feature().name();
-        const _status = this.ITcpServer.status();
-        this.IRunFile.set([ _name, 'ITcpServer' ], _status );
+        this.IRunFile.set([ _name, 'ITcpServer' ], status );
     }
 
     /*
@@ -326,16 +328,6 @@ export class coreBroker {
         exports.Msg.debug( 'coreBroker.status()', 'serviceName='+_serviceName );
         const self = this;
         let status = {};
-        status[_serviceName] = {};
-        // ITcpServer
-        const _tcpServerPromise = function(){
-            return new Promise(( resolve, reject ) => {
-                const o = self.ITcpServer.status();
-                exports.Msg.debug( 'coreBroker.status()', 'ITcpServer', o );
-                status[_serviceName].ITcpServer = { ...o };
-                resolve( status );
-            });
-        };
         // run-status.schema.json
         const _runStatus = function(){
             return new Promise(( resolve, reject ) => {
@@ -343,11 +335,10 @@ export class coreBroker {
                     module: self.feature().module(),
                     class: self._class(),
                     pids: [ process.pid ],
-                    ports: [ self.config().listenPort, self.config().messaging.port ],
-                    status: status[_serviceName].ITcpServer.status
+                    ports: [ self.config().listenPort, self.config().messaging.port ]
                 };
                 exports.Msg.debug( 'coreBroker.status()', 'runStatus', o );
-                status[_serviceName] = { ...status[_serviceName], ...o };
+                status = { ...status, ...o };
                 resolve( status );
             });
         };
@@ -366,13 +357,13 @@ export class coreBroker {
                         NODE_ENV: process.env.NODE_ENV || '(undefined)'
                     },
                     // general runtime constants
-                    logfile: self.api().exports().Logger.logFname(),
+                    logfile: exports.Logger.logFname(),
                     runfile: self.IRunFile.runFile( _serviceName ),
-                    storageDir: self.api().exports().coreConfig.storageDir(),
+                    storageDir: exports.coreConfig.storageDir(),
                     version: self.api().packet().getVersion()
                 };
                 exports.Msg.debug( 'coreBroker.status()', 'brokerStatus', o );
-                status[_serviceName] = { ...status[_serviceName], ...o };
+                status = { ...status, ...o };
                 resolve( status );
             });
         };
@@ -388,16 +379,22 @@ export class coreBroker {
                             elapsed: pidRes.elapsed
                         };
                         exports.Msg.debug( 'coreBroker.status()', 'pidUsage', o );
-                        status[_serviceName].pidUsage = { ...o };
+                        status.pidUsage = { ...o };
                         resolve( status );
                     });
             });
         };
         return Promise.resolve( true )
-            .then(() => { return _tcpServerPromise(); })
             .then(() => { return _runStatus(); })
             .then(() => { return _thisStatus(); })
-            .then(() => { return _pidPromise(); });
+            .then(() => { return _pidPromise(); })
+            .then(() => { return this.IStatus ? this.IStatus.run( status ) : status; })
+            .then(( res ) => {
+                let featureStatus = {};
+                featureStatus[_serviceName] = res;
+                //console.log( 'coreController.status() featureStatus', featureStatus );
+                return Promise.resolve( featureStatus );
+            });
     }
 
     /**
