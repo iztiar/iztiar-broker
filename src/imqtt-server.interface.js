@@ -4,6 +4,7 @@
  * The class is only instanciated and started in an already forked process.
  */
 import Aedes from 'aedes';
+import aedesStats from 'aedes-stats';
 import { createServer } from 'aedes-server-factory';
 
 export class IMqttServer {
@@ -55,12 +56,19 @@ export class IMqttServer {
         const i = instance ? instance : this._instance;
         i.api().exports().Msg.debug( 'IMqttServer.statusPart()', 'instance '+( instance ? 'set':'unset' ));
         const self = instance ? instance.IMqttServer : this;
-        const o = {
-            IMqttServer: {
-                status: self._status,
-                port: self._mqttPort
-            }
+        const a = {
+            status: self._status,
+            port: self._mqttPort
         };
+        let b = {};
+        if( self._aedesServer ){
+            b = {
+                aedes: self._aedesServer.id,
+                connected: self._aedesServer.connectedClients,
+                closed: self._aedesServer.closed
+            };
+        }
+        const o = { IMqttServer: { ...a, ...b }};
         return Promise.resolve( o );
     }
     
@@ -114,6 +122,7 @@ export class IMqttServer {
 
         return new Promise(( resolve, reject ) => {
             self._mqttServer.listen( self._mqttPort, '0.0.0.0', () => {
+                aedesStats( this._aedesServer );
                 self.status( IMqttServer.s.RUNNING ).then(( res ) => { self._listening( res ); })
                 resolve( true );
             });
