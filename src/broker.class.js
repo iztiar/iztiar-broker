@@ -10,7 +10,7 @@ export class coreBroker {
     /**
      * Default ports number
      */
-     static d = {
+    static d = {
         listenPort: 24002,
         messagingPort: 24003,
         alivePeriod: 60*1000
@@ -24,7 +24,7 @@ export class coreBroker {
      *   > endConnection {Boolean} whether the server should close the client connection
      *      alternative being to wait for the client closes itself its own connection
      */
-     static verbs = {
+    static verbs = {
         'iz.status': {
             label: 'returns the status of this coreBroker service',
             fn: coreBroker._izStatus
@@ -53,6 +53,9 @@ export class coreBroker {
             return Promise.resolve( reply );
         });
     }
+
+    // when this feature has started
+    _started = null;
 
     // when stopping, the port to which answer and forward the received messages
     _forwardPort = 0;
@@ -348,7 +351,9 @@ export class coreBroker {
         // coreBroker
         const _thisStatus = function(){
             return new Promise(( resolve, reject ) => {
+                if( !self._started ) self._started = self.api().exports().utils.now();
                 const o = {
+                    started: self._started,
                     listenPort: self.config().listenPort,
                     messagingPort: self.config().messaging.port,
                     // running environment
