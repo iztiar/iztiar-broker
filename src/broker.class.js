@@ -281,7 +281,7 @@ export class coreBroker {
         exports.Msg.debug( 'coreBroker.itcpserverListening()' );
         const self = this;
         const _name = this.feature().name();
-        let _msg = 'Hello, I am \''+_name+'\' '+this.constructor.name;
+        let _msg = 'Hello, I am \''+_name+'\' '+this._class();
         _msg += ', running with pid '+process.pid+ ', listening on port '+this.config().listenPort;
         this.status().then(( status ) => {
             status[_name].event = 'startup';
@@ -368,21 +368,19 @@ export class coreBroker {
             });
         };
         // pidUsage
-        const _pidPromise = function( firstRes ){
-            return new Promise(( resolve, reject ) => {
-                pidUsage( process.pid )
-                    .then(( pidRes ) => {
-                        const o = {
-                            cpu: pidRes.cpu,
-                            memory: pidRes.memory,
-                            ctime: pidRes.ctime,
-                            elapsed: pidRes.elapsed
-                        };
-                        exports.Msg.debug( 'coreBroker.status()', 'pidUsage', o );
-                        status.pidUsage = { ...o };
-                        resolve( status );
-                    });
-            });
+        const _pidPromise = function(){
+            return pidUsage( process.pid )
+                .then(( res ) => {
+                    const o = {
+                        cpu: res.cpu,
+                        memory: res.memory,
+                        ctime: res.ctime,
+                        elapsed: res.elapsed
+                    };
+                    exports.Msg.debug( 'coreBroker.status()', 'pidUsage', o );
+                    status.pidUsage = { ...o };
+                    return Promise.resolve( status );
+                });
         };
         return Promise.resolve( true )
             .then(() => { return _runStatus(); })
@@ -412,15 +410,16 @@ export class coreBroker {
     terminate( words=[], cb=null ){
         const exports = this.api().exports();
         exports.Msg.debug( 'coreBroker.terminate()' );
-        const _status = this.ITcpServer.status();
-        if( _status.status === exports.ITcpServer.s.STOPPING ){
-            exports.Msg.debug( 'coreBroker.terminate() returning as currently stopping' );
-            return Promise.resolve( true );
-        }
-        if( _status.status === exports.ITcpServer.s.STOPPED ){
-            exports.Msg.debug( 'coreBroker.terminate() returning as already stopped' );
-            return Promise.resolve( true );
-        }
+        this.ITcpServer.status().then(( res ) => {
+            if( res.status === exports.ITcpServer.s.STOPPING ){
+                exports.Msg.debug( 'coreBroker.terminate() returning as currently stopping' );
+                return Promise.resolve( true );
+            }
+            if( res.status === exports.ITcpServer.s.STOPPED ){
+                exports.Msg.debug( 'coreBroker.terminate() returning as already stopped' );
+                return Promise.resolve( true );
+            }
+        });
         const _name = this.feature().name();
         const _module = this.feature().module();
         this._forwardPort = words && words[0] && self.api().exports().utils.isInt( words[0] ) ? words[0] : 0;
