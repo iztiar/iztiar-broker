@@ -130,11 +130,11 @@ export class coreBroker {
      * [-implementation Api-]
      */
     _checkStatus(){
-        this.api().exports().Msg.debug( 'coreBroker._checkStatus()' );
+        const exports = this.api().exports();
+        exports.Msg.debug( 'coreBroker._checkStatus()' );
         const _name = this.feature().name();
         const _json = this.IRunFile.jsonByName( _name );
-        const Checkable = this.api().exports().Checkable;
-        let o = new Checkable();
+        let o = new exports.Checkable();
         if( _json && _json[_name] ){
             o.pids = [ ... _json[_name].pids ];
             o.ports = [ _json[_name].listenPort ];
@@ -153,7 +153,8 @@ export class coreBroker {
      * @returns {Object} the filled configuration for the service
      */
     _filledConfig(){
-        this.api().exports().Msg.debug( 'coreBroker.filledConfig()' );
+        const exports = this.api().exports();
+        exports.Msg.debug( 'coreBroker.filledConfig()' );
         let _config = this.feature().config();
         let _filled = { ..._config };
         if( !_filled.class ){
@@ -223,13 +224,12 @@ export class coreBroker {
      */
     iserviceableStart(){
         const exports = this.api().exports();
-        const Msg = exports.Msg;
-        Msg.debug( 'coreBroker.iserviceableStart()', 'forkedProcess='+exports.IForkable.forkedProcess());
+        exports.Msg.debug( 'coreBroker.iserviceableStart()', 'forkedProcess='+exports.IForkable.forkedProcess());
         return Promise.resolve( true )
             .then(() => { return this.ITcpServer.create( this.config().listenPort ); })
-            .then(() => { Msg.debug( 'coreBroker.iserviceableStart() tcpServer created' ); })
+            .then(() => { exports.Msg.debug( 'coreBroker.iserviceableStart() tcpServer created' ); })
             .then(() => { return this.IMqttServer.create( this.config().messaging.port ); })
-            .then(() => { Msg.debug( 'coreBroker.iserviceableStart() mqttServer created' ); })
+            .then(() => { exports.Msg.debug( 'coreBroker.iserviceableStart() mqttServer created' ); })
             .then(() => { this.IMqttClient.advertise( this.config().messaging ); })
             .then(() => { return new Promise(() => {}); });
     }
@@ -240,10 +240,11 @@ export class coreBroker {
      * [-implementation Api-]
      */
     iserviceableStatus(){
-        this.api().exports().Msg.debug( 'coreBroker.iserviceableStatus()' );
-        this.api().exports().utils.tcpRequest( this.config().listenPort, 'iz.status' )
+        const exports = this.api().exports();
+        exports.Msg.debug( 'coreBroker.iserviceableStatus()' );
+        exports.utils.tcpRequest( this.config().listenPort, 'iz.status' )
             .then(( answer ) => {
-                this.api().exports().Msg.debug( 'coreBroker.iserviceableStatus()', 'receives answer to \'iz.status\'', answer );
+                exports.Msg.debug( 'coreBroker.iserviceableStatus()', 'receives answer to \'iz.status\'', answer );
             }, ( failure ) => {
                 // an error message is already sent by the called self.api().exports().utils.tcpRequest()
                 //  what more to do ??
@@ -256,8 +257,9 @@ export class coreBroker {
      * [-implementation Api-]
      */
     iserviceableStop(){
-        this.api().exports().Msg.debug( 'coreBroker.iserviceableStop()' );
-        this.api().exports().utils.tcpRequest( this.config().listenPort, 'iz.stop' )
+        const exports = this.api().exports();
+        exports.Msg.debug( 'coreBroker.iserviceableStop()' );
+        exports.utils.tcpRequest( this.config().listenPort, 'iz.stop' )
             .then(( answer ) => {
                 this.api().exports().Msg.debug( 'coreBroker.iserviceableStop()', 'receives answer to \'iz.stop\'', answer );
             }, ( failure ) => {
@@ -274,7 +276,8 @@ export class coreBroker {
      * [-implementation Api-]
      */
     itcpserverListening(){
-        this.api().exports().Msg.debug( 'coreBroker.itcpserverListening()' );
+        const exports = this.api().exports();
+        exports.Msg.debug( 'coreBroker.itcpserverListening()' );
         const self = this;
         const _name = this.feature().name();
         let _msg = 'Hello, I am \''+_name+'\' '+this.constructor.name;
@@ -318,9 +321,9 @@ export class coreBroker {
      *  A minimum of structure is so required, described in run-status.schema.json.
      */
     status(){
-        const Msg = this.api().exports().Msg;
+        const exports = this.api().exports();
         const _serviceName = this.feature().name();
-        Msg.debug( 'coreBroker.status()', 'serviceName='+_serviceName );
+        exports.Msg.debug( 'coreBroker.status()', 'serviceName='+_serviceName );
         const self = this;
         let status = {};
         status[_serviceName] = {};
@@ -328,7 +331,7 @@ export class coreBroker {
         const _tcpServerPromise = function(){
             return new Promise(( resolve, reject ) => {
                 const o = self.ITcpServer.status();
-                Msg.debug( 'coreBroker.status()', 'ITcpServer', o );
+                exports.Msg.debug( 'coreBroker.status()', 'ITcpServer', o );
                 status[_serviceName].ITcpServer = { ...o };
                 resolve( status );
             });
@@ -343,7 +346,7 @@ export class coreBroker {
                     ports: [ self.config().listenPort, self.config().messaging.port ],
                     status: status[_serviceName].ITcpServer.status
                 };
-                Msg.debug( 'coreBroker.status()', 'runStatus', o );
+                exports.Msg.debug( 'coreBroker.status()', 'runStatus', o );
                 status[_serviceName] = { ...status[_serviceName], ...o };
                 resolve( status );
             });
@@ -351,7 +354,7 @@ export class coreBroker {
         // coreBroker
         const _thisStatus = function(){
             return new Promise(( resolve, reject ) => {
-                if( !self._started ) self._started = self.api().exports().utils.now();
+                if( !self._started ) self._started = exports.utils.now();
                 const o = {
                     started: self._started,
                     listenPort: self.config().listenPort,
@@ -368,7 +371,7 @@ export class coreBroker {
                     storageDir: self.api().exports().coreConfig.storageDir(),
                     version: self.api().packet().getVersion()
                 };
-                Msg.debug( 'coreBroker.status()', 'brokerStatus', o );
+                exports.Msg.debug( 'coreBroker.status()', 'brokerStatus', o );
                 status[_serviceName] = { ...status[_serviceName], ...o };
                 resolve( status );
             });
@@ -384,7 +387,7 @@ export class coreBroker {
                             ctime: pidRes.ctime,
                             elapsed: pidRes.elapsed
                         };
-                        Msg.debug( 'coreBroker.status()', 'pidUsage', o );
+                        exports.Msg.debug( 'coreBroker.status()', 'pidUsage', o );
                         status[_serviceName].pidUsage = { ...o };
                         resolve( status );
                     });
@@ -410,15 +413,15 @@ export class coreBroker {
      *  this terminate() function. So, try to prevent a double execution.
      */
     terminate( words=[], cb=null ){
-        const Msg = this.api().exports().Msg;
-        Msg.debug( 'coreBroker.terminate()' );
+        const exports = this.api().exports();
+        exports.Msg.debug( 'coreBroker.terminate()' );
         const _status = this.ITcpServer.status();
-        if( _status.status === this.api().exports().ITcpServer.s.STOPPING ){
-            Msg.debug( 'coreBroker.terminate() returning as currently stopping' );
+        if( _status.status === exports.ITcpServer.s.STOPPING ){
+            exports.Msg.debug( 'coreBroker.terminate() returning as currently stopping' );
             return Promise.resolve( true );
         }
-        if( _status.status === this.api().exports().ITcpServer.s.STOPPED ){
-            Msg.debug( 'coreBroker.terminate() returning as already stopped' );
+        if( _status.status === exports.ITcpServer.s.STOPPED ){
+            exports.Msg.debug( 'coreBroker.terminate() returning as already stopped' );
             return Promise.resolve( true );
         }
         const _name = this.feature().name();
@@ -443,7 +446,7 @@ export class coreBroker {
                 self.IMqttClient.terminate();
                 self.IMqttServer.terminate();
                 self.IRunFile.remove( _name );
-                Msg.info( _name+' coreBroker terminating with code '+process.exitCode );
+                exports.Msg.info( _name+' coreBroker terminating with code '+process.exitCode );
                 return Promise.resolve( true)
                 //process.exit();
             });
