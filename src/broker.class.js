@@ -93,7 +93,8 @@ export class coreBroker {
         Interface.add( this, exports.IMqttClient, {
             _class: this._class,
             _module: this.feature().module,
-            _name: this._name
+            _name: this._name,
+            _status: this._imqttclientStatus
         });
 
         Interface.add( this, exports.IRunFile, {
@@ -189,6 +190,18 @@ export class coreBroker {
     iforkableTerminate(){
         this.api().exports().Msg.debug( 'coreBroker.iforkableTerminate()' );
         return this.terminate();
+    }
+
+    /**
+     * @returns {Promise} which resolves to the status of the service
+     * we want here remove the first key because it is useless as part of the topic
+     * [-implementation Api-]
+     */
+    _imqttclientStatus(){
+        return this.status().then(( res ) => {
+            const name = Object.keys( res )[0];
+            return res[name];
+        });
     }
 
     /*
