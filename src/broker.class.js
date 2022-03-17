@@ -130,7 +130,8 @@ export class coreBroker {
         this.api().exports().Msg.debug( 'coreBroker._checkStatus()' );
         const _name = this.feature().name();
         const _json = this.IRunFile.jsonByName( _name );
-        let o = { startable: false, reasons: [], pids: [], ports: [] };
+        const Checkable = this.api().exports().Checkable;
+        let o = new Checkable();
         if( _json && _json[_name] ){
             o.pids = [ ... _json[_name].pids ];
             o.ports = [ _json[_name].listenPort ];
