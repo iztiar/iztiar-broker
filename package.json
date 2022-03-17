@@ -45,6 +45,8 @@
     "node": ">12.x"
   },
   "iztiar": {
-    "target": "@iztiar/iztiar-core"
+    "targets": [
+      "@iztiar/iztiar-core"
+    ]
   }
 }
