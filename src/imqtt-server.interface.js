@@ -35,22 +35,45 @@ export class IMqttServer {
      * @param {*} instance the implementation instance
      * @returns {IMqttServer}
      */
-     constructor( instance ){
-        instance.api().exports().Msg.debug( 'IMqttServer instanciation' );
+    constructor( instance ){
+        const exports = instance.api().exports();
+        exports.Msg.debug( 'IMqttServer instanciation' );
         this._instance = instance;
         this._status = IMqttServer.s.STOPPED;
+
+        // if not already done, make sure the instance implements a IStatus interface
+        //  and define a new status part
+        const IStatus = exports.IStatus;
+        if( !instance.IStatus ) Interface.add( instance, IStatus );
+        instance.IStatus.add( this._statusPart );
+
         return this;
     }
 
+    // @returns {Promise} which resolves to the status part for the IMqttServer
+    _statusPart( instance ){
+        const i = instance ? instance : this._instance;
+        i.api().exports().Msg.debug( 'IMqttServer.statusPart()', 'instance '+( instance ? 'set':'unset' ));
+        const self = instance ? instance.IMqttServer : this;
+        const o = {
+            IMqttServer: {
+                status: self._status,
+                port: self._mqttPort
+            }
+        };
+        return Promise.resolve( o );
+    }
+    
     /* *** ***************************************************************************************
        *** The implementation API, i.e; the functions the implementation may want to implement ***
        *** *************************************************************************************** */
 
     /**
      * What to do when this IMqttServer is ready listening ?
+     * @param {Object} status of the ITcpServer
      * [-implementation Api-]
      */
-    _listening(){
+    _listening( status ){
         this._instance.api().exports().Msg.debug( 'IMqttServer._listening()' );
     }
 
@@ -91,8 +114,7 @@ export class IMqttServer {
 
         return new Promise(( resolve, reject ) => {
             self._mqttServer.listen( self._mqttPort, '0.0.0.0', () => {
-                self.status( IMqttServer.s.RUNNING );
-                self._listening();
+                self.status( IMqttServer.s.RUNNING ).then(( res ) => { self._listening( res ); })
                 resolve( true );
             });
         });
@@ -113,18 +135,20 @@ export class IMqttServer {
         //    return;
         //}
         // not very sure this is a good idea !?
-        if( this.status().status !== IMqttServer.s.STOPPING ){
-            Msg.info( 'auto-killing on '+e.code+' error' );
-            this.status( ITcpServer.s.STOPPING );
-            process.kill( process.pid, 'SIGTERM' );
-            //process.kill( process.pid, 'SIGKILL' ); // if previous is not enough ?
-        }
+        this.status().then(( res ) => {
+            if( res.status !== IMqttServer.s.STOPPING ){
+                Msg.info( 'auto-killing on '+e.code+' error' );
+                this.status( ITcpServer.s.STOPPING );
+                process.kill( process.pid, 'SIGTERM' );
+                //process.kill( process.pid, 'SIGKILL' ); // if previous is not enough ?
+            }
+        });
     }
 
     /**
      * Getter/Setter
      * @param {String} newStatus the status to be set to the IMqttServer
-     * @returns {Object} the status of the IMqttServer
+     * @returns {Promise} which resolves to the status of this IMqttServer
      */
     status( newStatus ){
         const Msg = this._instance.api().exports().Msg;
@@ -132,12 +156,7 @@ export class IMqttServer {
         if( newStatus && typeof newStatus === 'string' && newStatus.length && Object.values( IMqttServer.s ).includes( newStatus )){
             this._status = newStatus;
         }
-        const o = {
-            status: this._status,
-            port: this._port
-        };
-        //Msg.debug( 'IMqttServer.status()', o );
-        return o;
+        return this._statusPart().then(( res ) => { return Promise.resolve( res.IMqttServer ); });
     }
 
     /**
@@ -147,14 +166,16 @@ export class IMqttServer {
     terminate(){
         const Msg = this._instance.api().exports().Msg;
         Msg.debug( 'IMqttServer.terminate()' );
-        if( this.status().status === IMqttServer.s.STOPPING ){
-            Msg.debug( 'IMqttServer.terminate() returning as already stopping' );
-            return;
-        }
-        if( this.status().status === IMqttServer.s.STOPPED ){
-            Msg.debug( 'IMqttServer.terminate() returning as already stopped' );
-            return;
-        }
+        this.status().then(( res ) => {
+            if( res.status === IMqttServer.s.STOPPING ){
+                Msg.debug( 'IMqttServer.terminate() returning as already stopping' );
+                return;
+            }
+            if( res.status === IMqttServer.s.STOPPED ){
+                Msg.debug( 'IMqttServer.terminate() returning as already stopped' );
+                return;
+            }
+        });
 
         // we advertise we are stopping as soon as possible
         this.status( IMqttServer.s.STOPPING );
