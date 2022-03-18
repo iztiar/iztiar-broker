@@ -6,9 +6,9 @@
   "keywords": [
     "iztiar",
     "iztiar-plugin",
+    "forkable",
     "broker",
     "mqtt",
-    "bus",
     "messaging"
   ],
   "homepage": "https://github.com/iztiar/iztiar-broker",
@@ -42,11 +42,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "engines": {
-    "node": ">12.x"
-  },
-  "iztiar": {
-    "targets": [
-      "@iztiar/iztiar-core"
-    ]
+    "node": ">12.x",
+    "@iztiar/iztiar-core": ">0.5"
   }
 }
