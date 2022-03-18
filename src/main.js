@@ -9,10 +9,10 @@ import { coreBroker } from './imports.js';
 /**
  * @param {engineApi} api the engine API as described in engine-api.schema.json
  * @param {featureCard} card a description of this feature
- * @returns {Promise} which must resolves to an IServiceable instance
+ * @returns {Promise} which must resolves to an IFeaturer instance
  */
 export default ( api, card ) => {
     //console.log( '@iztiar/iztiar-broker default exported function()' );
     //console.log( api );
-    return new coreBroker( api, card ).then(( o ) => { return o.IServiceable; });
+    return new coreBroker( api, card ).then(( o ) => { return o.IFeaturer; });
 }

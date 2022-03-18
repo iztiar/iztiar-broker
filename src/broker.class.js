@@ -101,13 +101,13 @@ export class coreBroker {
             runDir: this.irunfileRunDir
         });
 
-        Interface.add( this, exports.IServiceable, {
+        Interface.add( this, exports.IFeaturer, {
             class: this._class,
-            config: this.iserviceableConfig,
-            killed: this.iserviceableKilled,
-            start: this.iserviceableStart,
-            status: this.iserviceableStatus,
-            stop: this.iserviceableStop
+            config: this.ifeaturerConfig,
+            killed: this.ifeaturerKilled,
+            start: this.ifeaturerStart,
+            status: this.ifeaturerStatus,
+            stop: this.ifeaturerStop
         });
 
         Interface.add( this, exports.ITcpServer, {
@@ -217,8 +217,8 @@ export class coreBroker {
      * @returns {Object} the filled configuration for the feature
      * [-implementation Api-]
      */
-    iserviceableConfig(){
-        this.api().exports().Msg.debug( 'coreBroker.iserviceableConfig()', this.config());
+    ifeaturerConfig(){
+        this.api().exports().Msg.debug( 'coreBroker.ifeaturerConfig()', this.config());
         return this.config();
     }
 
@@ -226,8 +226,8 @@ export class coreBroker {
      * If the service had to be SIGKILL'ed to be stoppped, then gives it an opportunity to make some cleanup
      * [-implementation Api-]
      */
-    iserviceableKilled(){
-        this.api().exports().Msg.debug( 'coreBroker.iserviceableKilled()' );
+    ifeaturerKilled(){
+        this.api().exports().Msg.debug( 'coreBroker.ifeaturerKilled()' );
         this.IRunFile.remove( this.feature().name());
     }
 
@@ -235,14 +235,14 @@ export class coreBroker {
      * @returns {Promise}
      * [-implementation Api-]
      */
-    iserviceableStart(){
+    ifeaturerStart(){
         const exports = this.api().exports();
-        exports.Msg.debug( 'coreBroker.iserviceableStart()', 'forkedProcess='+exports.IForkable.forkedProcess());
+        exports.Msg.debug( 'coreBroker.ifeaturerStart()', 'forkedProcess='+exports.IForkable.forkedProcess());
         return Promise.resolve( true )
             .then(() => { return this.ITcpServer.create( this.config().listenPort ); })
-            .then(() => { exports.Msg.debug( 'coreBroker.iserviceableStart() tcpServer created' ); })
+            .then(() => { exports.Msg.debug( 'coreBroker.ifeaturerStart() tcpServer created' ); })
             .then(() => { return this.IMqttServer.create( this.config().messaging.port ); })
-            .then(() => { exports.Msg.debug( 'coreBroker.iserviceableStart() mqttServer created' ); })
+            .then(() => { exports.Msg.debug( 'coreBroker.ifeaturerStart() mqttServer created' ); })
             .then(() => { this.IMqttClient.advertise( this.config().messaging ); })
             .then(() => { return new Promise(() => {}); });
     }
@@ -252,12 +252,12 @@ export class coreBroker {
      * @returns {Promise} which resolves the a status object
      * [-implementation Api-]
      */
-    iserviceableStatus(){
+    ifeaturerStatus(){
         const exports = this.api().exports();
-        exports.Msg.debug( 'coreBroker.iserviceableStatus()' );
+        exports.Msg.debug( 'coreBroker.ifeaturerStatus()' );
         exports.utils.tcpRequest( this.config().listenPort, 'iz.status' )
             .then(( answer ) => {
-                exports.Msg.debug( 'coreBroker.iserviceableStatus()', 'receives answer to \'iz.status\'', answer );
+                exports.Msg.debug( 'coreBroker.ifeaturerStatus()', 'receives answer to \'iz.status\'', answer );
             }, ( failure ) => {
                 // an error message is already sent by the called self.api().exports().utils.tcpRequest()
                 //  what more to do ??
@@ -269,12 +269,12 @@ export class coreBroker {
      * @returns {Promise}
      * [-implementation Api-]
      */
-    iserviceableStop(){
+    ifeaturerStop(){
         const exports = this.api().exports();
-        exports.Msg.debug( 'coreBroker.iserviceableStop()' );
+        exports.Msg.debug( 'coreBroker.ifeaturerStop()' );
         exports.utils.tcpRequest( this.config().listenPort, 'iz.stop' )
             .then(( answer ) => {
-                this.api().exports().Msg.debug( 'coreBroker.iserviceableStop()', 'receives answer to \'iz.stop\'', answer );
+                this.api().exports().Msg.debug( 'coreBroker.ifeaturerStop()', 'receives answer to \'iz.stop\'', answer );
             }, ( failure ) => {
                 // an error message is already sent by the called self.api().exports().utils.tcpRequest()
                 //  what more to do ??
