@@ -49,7 +49,7 @@ export class coreBroker {
     static _izStop( self, reply ){
         self.terminate( reply.args, ( res ) => {
             reply.answer = res;
-            self.api().exports().Msg.debug( 'coreBroker.izStop()', 'replying with', reply );
+            self.IFeatureProvider.api().exports().Msg.debug( 'coreBroker.izStop()', 'replying with', reply );
             return Promise.resolve( reply );
         });
     }
@@ -216,19 +216,36 @@ export class coreBroker {
 
     /*
      * Get the status of the service
-     * @returns {Promise} which resolves the a status object
+     * @returns {Promise} which resolves to the status object
      * [-implementation Api-]
      */
     ifeatureproviderStatus(){
         const exports = this.IFeatureProvider.api().exports();
         exports.Msg.debug( 'coreBroker.ifeatureproviderStatus()' );
-        exports.utils.tcpRequest( this.IFeatureProvider.feature().config().listenPort, 'iz.status' )
+        exports.utils.tcpRequest( this.IFeatureProvider.feature().config().ITcpServer.port, 'iz.status' )
             .then(( answer ) => {
                 exports.Msg.debug( 'coreBroker.ifeatureproviderStatus()', 'receives answer to \'iz.status\'', answer );
             }, ( failure ) => {
                 // an error message is already sent by the called self.api().exports().utils.tcpRequest()
                 //  what more to do ??
                 //Msg.error( 'TCP error on iz.stop command:', failure );
+            });
+    }
+
+    /*
+     * @returns {Promise}
+     * [-implementation Api-]
+     */
+    ifeatureproviderStop(){
+        const exports = this.IFeatureProvider.api().exports();
+        exports.Msg.debug( 'coreBroker.ifeatureproviderStop()' );
+        exports.utils.tcpRequest( this.IFeatureProvider.feature().config().ITcpServer.port, 'iz.stop' )
+            .then(( answer ) => {
+                exports.Msg.debug( 'coreBroker.ifeatureproviderStop()', 'receives answer to \'iz.stop\'', answer );
+            }, ( failure ) => {
+                // an error message is already sent by the called self.api().exports().utils.tcpRequest()
+                //  what more to do ??
+                //IMsg.error( 'TCP error on iz.stop command:', failure );
             });
     }
 
@@ -264,23 +281,6 @@ export class coreBroker {
     }
 
     /*
-     * @returns {Promise}
-     * [-implementation Api-]
-     */
-    ifeatureproviderStop(){
-        const exports = this.IFeatureProvider.api().exports();
-        exports.Msg.debug( 'coreBroker.ifeatureproviderStop()' );
-        exports.utils.tcpRequest( this.IFeatureProvider.feature().config().listenPort, 'iz.stop' )
-            .then(( answer ) => {
-                exports.Msg.debug( 'coreBroker.ifeatureproviderStop()', 'receives answer to \'iz.stop\'', answer );
-            }, ( failure ) => {
-                // an error message is already sent by the called self.api().exports().utils.tcpRequest()
-                //  what more to do ??
-                //IMsg.error( 'TCP error on iz.stop command:', failure );
-            });
-    }
-
-    /*
      * What to do when this ITcpServer is ready listening ?
      *  -> write the runfile before advertising parent to prevent a race condition when writing the file
      *  -> send the current service status
@@ -294,7 +294,7 @@ export class coreBroker {
         const self = this;
         const _name = featCard.name();
         let _msg = 'Hello, I am \''+_name+'\' '+featCard.class();
-        _msg += ', running with pid '+process.pid+ ', listening on port '+featCard.config().listenPort;
+        _msg += ', running with pid '+process.pid+ ', listening on port '+featCard.config().ITcpServer.port;
         this.status().then(( status ) => {
             status[_name].event = 'startup';
             status[_name].helloMessage = _msg;
@@ -342,38 +342,20 @@ export class coreBroker {
         exports.Msg.debug( 'coreBroker.status()', 'serviceName='+_serviceName );
         const self = this;
         let status = {};
-        // run-status.schema.json
+        // run-status.schema.json (a bit extended here)
         const _runStatus = function(){
             return new Promise(( resolve, reject ) => {
+                if( !self._started ) self._started = exports.utils.now();
                 const o = {
                     module: featCard.module(),
                     class: featCard.class(),
                     pids: [ process.pid ],
-                    ports: [ featCard.config().ITcpServer.port, featCard.config().IMqttServer.port ]
+                    ports: [ featCard.config().ITcpServer.port, featCard.config().IMqttServer.port ],
+                    runfile: self.IRunFile.runFile( _serviceName ),
+                    started: self._started
                 };
                 exports.Msg.debug( 'coreBroker.status()', 'runStatus', o );
                 status = { ...status, ...o };
-                resolve( status );
-            });
-        };
-        // coreBroker
-        const _thisStatus = function(){
-            return new Promise(( resolve, reject ) => {
-                if( !self._started ) self._started = exports.utils.now();
-                const o = {
-                    started: self._started,
-                    // running environment
-                    env: {
-                        IZTIAR_DEBUG: process.env.IZTIAR_DEBUG || '(undefined)',
-                        NODE_ENV: process.env.NODE_ENV || '(undefined)'
-                    },
-                    // general runtime constants
-                    logfile: exports.Logger.logFname(),
-                    runfile: self.IRunFile.runFile( _serviceName ),
-                    version: self.IFeatureProvider.api().packet().getVersion()
-                };
-                exports.Msg.debug( 'coreBroker.status()', 'brokerStatus', o );
-                status = { ...status, ...o, ...self.IFeatureProvider.api().config().filled() };
                 resolve( status );
             });
         };
@@ -392,21 +374,9 @@ export class coreBroker {
                     return Promise.resolve( status );
                 });
         };
-        // capabilities
-        const _capabilities = function(){
-            let _caps = [];
-            if( self.ICapability ){
-                _caps = self.ICapability.get();
-            }
-            exports.Msg.debug( 'coreBroker.status()', 'capabilities', _caps );
-            status.capabilities = _caps;
-            return Promise.resolve( status );
-        };
         return Promise.resolve( true )
             .then(() => { return _runStatus(); })
-            .then(() => { return _thisStatus(); })
             .then(() => { return _pidPromise(); })
-            .then(() => { return _capabilities(); })
             .then(() => { return this.IStatus ? this.IStatus.run( status ) : status; })
             .then(( res ) => {
                 let featureStatus = {};
