@@ -11,32 +11,28 @@
             "properties": {
                 "module": {
                     "type": "string",
-                    "description": "the name of the module which provides the service, or 'core'"
+                    "description": "the name of the module which provides the feature, or 'core'"
                 },
                 "class": {
                     "type": "string",
-                    "description": "the name of the class or type or something inside the module, which qualifies the service type, may be set to 'coreBroker'"
+                    "description": "the name of the class which provides the feature"
                 },
-                "listenPort": {
-                    "type": "integer",
-                    "description": "TCP listening port number for internal service management",
-                    "default": 24002
+                "enabled": {
+                    "type": "boolean",
+                    "description": "whether the feature is enabled",
+                    "default": true
                 },
-                "messaging": {
+                "IMqttClient": {
                     "type": "object",
-                    "description": "options for the messaging service, mandatory to manage the messaging bus",
-                    "properties": {
-                        "port": {
-                            "type": "integer",
-                            "description": "the port number of the message bus",
-                            "default": 24003
-                        },
-                        "alivePeriod": {
-                            "type": "integer",
-                            "description": "interval (ms) between two alive publications, defaulting to 1mn",
-                            "default": 60000
-                        }
-                    }
+                    "description": "messaging service options (see IMqttClient schema)"
+                },
+                "IMqttServer": {
+                    "type": "object",
+                    "description": "messaging service options (see IMqttServer schema)"
+                },
+                "ITcpServer": {
+                    "type": "object",
+                    "description": "TCP server options (see ITcpServer schema)"
                 }
             }
         }

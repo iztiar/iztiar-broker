@@ -70,58 +70,68 @@ export class coreBroker {
         const Interface = exports.Interface;
         const Msg = exports.Msg;
 
-        Interface.extends( this, exports.baseService, api, card );
+        //Interface.extends( this, exports.baseService, api, card );
         Msg.debug( 'coreBroker instanciation' );
+        let _promise = this._fillConfig( api, card );
 
-        // first interface to be added, so that other interfaces may take advantage of that
+        // must implement the IFeatureProvider
+        Interface.add( this, exports.IFeatureProvider, {
+            killed: this.ifeatureproviderKilled,
+            start: this.ifeatureproviderStart,
+            status: this.ifeatureproviderStatus,
+            stop: this.ifeatureproviderStop
+        });
+        this.IFeatureProvider.api( api );
+        this.IFeatureProvider.feature( card );
+        _promise = _promise.then(() => { Interface.fillConfig( this, 'IFeatureProvider' ); });
+
+        // add this rather sooner, so that other interfaces may take advantage of it
         Interface.add( this, exports.ICapability );
 
         this.ICapability.add(
             'checkStatus', ( o ) => { return o._checkStatus(); }
         );
         this.ICapability.add(
-            'broker', ( o ) => { return Promise.resolve( o.IRunFile.get( o.feature().name(), 'helloMessage' )); }
+            'broker', ( o ) => { return Promise.resolve( o.IRunFile.get( card.name(), 'helloMessage' )); }
         );
         this.ICapability.add(
-            'helloMessage', ( o, cap ) => { return Promise.resolve( o.IRunFile.get( o.feature().name(), cap )); }
+            'helloMessage', ( o, cap ) => { return Promise.resolve( o.IRunFile.get( card.name(), cap )); }
         );
+        _promise = _promise.then(() => { Interface.fillConfig( this, 'ICapability' ); });
 
         Interface.add( this, exports.IForkable, {
             _terminate: this.iforkableTerminate
         });
+        _promise = _promise.then(() => { Interface.fillConfig( this, 'IForkable' ); });
+
+        // declare IMqttServer before IMqttClient because the former forces the presence of the later
+        Interface.add( this, IMqttServer );
+        _promise = _promise.then(() => { Interface.fillConfig( this, 'IMqttServer' ); });
 
         Interface.add( this, exports.IMqttClient, {
-            _class: this._class,
-            _module: this.feature().module,
-            _name: this._name,
             _status: this._imqttclientStatus
         });
+        _promise = _promise.then(() => { Interface.fillConfig( this, 'IMqttClient' ); });
 
         Interface.add( this, exports.IRunFile, {
             runDir: this.irunfileRunDir
         });
-
-        Interface.add( this, exports.IFeaturer, {
-            class: this._class,
-            config: this.ifeaturerConfig,
-            killed: this.ifeaturerKilled,
-            start: this.ifeaturerStart,
-            status: this.ifeaturerStatus,
-            stop: this.ifeaturerStop
-        });
+        _promise = _promise.then(() => { Interface.fillConfig( this, 'IRunFile' ); });
 
         Interface.add( this, exports.ITcpServer, {
             _listening: this.itcpserverListening,
             _statsUpdated: this.itcpserverStatsUpdated,
             _verbs: this.itcpserverVerbs
         });
+        _promise = _promise.then(() => { Interface.fillConfig( this, 'ITcpServer' ); });
 
-        Interface.add( this, IMqttServer );
-
+        /*
         let _promise = Promise.resolve( true )
             .then(() => { return this._filledConfig(); })
-            .then(( o ) => { return this.config( o ); })
-            .then(() => { return Promise.resolve( this ); });
+            .then(( o ) => { return card.config( o ); })
+            
+            */
+        _promise = _promise.then(() => { return Promise.resolve( this ); });
 
         return _promise;
     }
@@ -131,14 +141,14 @@ export class coreBroker {
      * [-implementation Api-]
      */
     _checkStatus(){
-        const exports = this.api().exports();
+        const exports = this.IFeatureProvider.api().exports();
         exports.Msg.debug( 'coreBroker._checkStatus()' );
-        const _name = this.feature().name();
+        const _name = this.IFeatureProvider.feature().name();
         const _json = this.IRunFile.jsonByName( _name );
         let o = new exports.Checkable();
         if( _json && _json[_name] ){
             o.pids = [ ... _json[_name].pids ];
-            o.ports = [ _json[_name].listenPort ];
+            o.ports = [ _json[_name].ITcpServer.port ];
             o.startable = o.pids.length === 0 && o.ports.length === 0;
         } else {
             o.startable = true;
@@ -146,40 +156,80 @@ export class coreBroker {
         return Promise.resolve( o );
     }
 
-    _class(){
-        return this.constructor.name;
+    /*
+     * @param {engineApi} api the engine API as described in engine-api.schema.json
+     * @param {featureCard} card a description of this feature
+     * @returns {Promise} which resolves to the filled feature part configuration
+     * Note:
+     *  This class aims to provide a IMqttServer.
+     *  As a consequence, and even if it is not specified in the configuration, we will also have a IMqttClient
+     */
+    _fillConfig( api, card ){
+        api.exports().Msg.debug( 'coreBroker.fillConfig()' );
+        let _filled = { ...card.config() };
+        if( !_filled.class ){
+            _filled.class = this.constructor.name;
+        }
+        if( !Object.keys( _filled ).includes( 'enabled' )){
+            _filled.enabled = true;
+        }
+        if( Object.keys( _filled ).includes( 'IMqttServer' ) && !Object.keys( _filled ).includes( 'IMqttClient' )){
+            _filled.IMqttClient = {};
+        }
+        return Promise.resolve( card.config( _filled ));
     }
 
     /*
-     * @returns {Object} the filled configuration for the service
+     * @returns {Object} the filled configuration for the feature
+     * [-implementation Api-]
      */
-    _filledConfig(){
-        const exports = this.api().exports();
-        exports.Msg.debug( 'coreBroker.filledConfig()' );
-        let _config = this.feature().config();
-        let _filled = { ..._config };
-        if( !_filled.class ){
-            _filled.class = this._class();
-        }
-        if( !_filled.listenPort ){
-            _filled.listenPort = coreBroker.d.listenPort;
-        }
-        // if there is no messaging group, then the broker will not connect to the MQTT bus (which would be bad)
-        //  host is ignored here
-        if( Object.keys( _filled ).includes( 'messaging' )){
-            if( !_filled.messaging.port ){
-                _filled.messaging.port = coreBroker.d.messagingPort;
-            }
-            if( !_filled.messaging.alivePeriod ){
-                _filled.messaging.alivePeriod = coreBroker.d.alivePeriod;
-            }
-        }
-        return _filled;
+    ifeatureproviderConfig(){
+        this.IFeatureProvider.api().exports().Msg.debug( 'coreBroker.ifeatureproviderConfig()', this.IFeatureProvider.feature().config());
+        return this.IFeatureProvider.feature().config();
     }
 
-    // for whatever reason, this doesn't work the same than module() function fromIMqttClient point of view
-    _name(){
-        return this.feature().name();
+    /*
+     * If the service had to be SIGKILL'ed to be stoppped, then gives it an opportunity to make some cleanup
+     * [-implementation Api-]
+     */
+    ifeatureproviderKilled(){
+        this.IFeatureProvider.api().exports().Msg.debug( 'coreBroker.ifeatureproviderKilled()' );
+        this.IRunFile.remove( this.IFeatureProvider.feature().name());
+    }
+
+    /*
+     * @returns {Promise}
+     * [-implementation Api-]
+     */
+    ifeatureproviderStart(){
+        const exports = this.IFeatureProvider.api().exports();
+        const featCard = this.IFeatureProvider.feature();
+        exports.Msg.debug( 'coreBroker.ifeatureproviderStart()', 'forkedProcess='+exports.IForkable.forkedProcess());
+        return Promise.resolve( true )
+            .then(() => { return this.ITcpServer.create( featCard.config().ITcpServer.port ); })
+            .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() tcpServer created' ); })
+            .then(() => { return this.IMqttServer.create( featCard.config().IMqttServer.port ); })
+            .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() mqttServer created' ); })
+            .then(() => { this.IMqttClient.advertise( featCard.config().IMqttClient ); })
+            .then(() => { return new Promise(() => {}); });
+    }
+
+    /*
+     * Get the status of the service
+     * @returns {Promise} which resolves the a status object
+     * [-implementation Api-]
+     */
+    ifeatureproviderStatus(){
+        const exports = this.IFeatureProvider.api().exports();
+        exports.Msg.debug( 'coreBroker.ifeatureproviderStatus()' );
+        exports.utils.tcpRequest( this.IFeatureProvider.feature().config().listenPort, 'iz.status' )
+            .then(( answer ) => {
+                exports.Msg.debug( 'coreBroker.ifeatureproviderStatus()', 'receives answer to \'iz.status\'', answer );
+            }, ( failure ) => {
+                // an error message is already sent by the called self.api().exports().utils.tcpRequest()
+                //  what more to do ??
+                //Msg.error( 'TCP error on iz.stop command:', failure );
+            });
     }
 
     /*
@@ -188,7 +238,7 @@ export class coreBroker {
      * [-implementation Api-]
      */
     iforkableTerminate(){
-        this.api().exports().Msg.debug( 'coreBroker.iforkableTerminate()' );
+        this.IFeatureProvider.api().exports().Msg.debug( 'coreBroker.iforkableTerminate()' );
         return this.terminate();
     }
 
@@ -209,72 +259,20 @@ export class coreBroker {
      * [-implementation Api-]
      */
     irunfileRunDir(){
-        this.api().exports().Msg.debug( 'coreBroker.irunfileRunDir()' );
-        return this.api().config().runDir();
-    }
-
-    /*
-     * @returns {Object} the filled configuration for the feature
-     * [-implementation Api-]
-     */
-    ifeaturerConfig(){
-        this.api().exports().Msg.debug( 'coreBroker.ifeaturerConfig()', this.config());
-        return this.config();
-    }
-
-    /*
-     * If the service had to be SIGKILL'ed to be stoppped, then gives it an opportunity to make some cleanup
-     * [-implementation Api-]
-     */
-    ifeaturerKilled(){
-        this.api().exports().Msg.debug( 'coreBroker.ifeaturerKilled()' );
-        this.IRunFile.remove( this.feature().name());
+        this.IFeatureProvider.api().exports().Msg.debug( 'coreBroker.irunfileRunDir()' );
+        return this.IFeatureProvider.api().config().runDir();
     }
 
     /*
      * @returns {Promise}
      * [-implementation Api-]
      */
-    ifeaturerStart(){
-        const exports = this.api().exports();
-        exports.Msg.debug( 'coreBroker.ifeaturerStart()', 'forkedProcess='+exports.IForkable.forkedProcess());
-        return Promise.resolve( true )
-            .then(() => { return this.ITcpServer.create( this.config().listenPort ); })
-            .then(() => { exports.Msg.debug( 'coreBroker.ifeaturerStart() tcpServer created' ); })
-            .then(() => { return this.IMqttServer.create( this.config().messaging.port ); })
-            .then(() => { exports.Msg.debug( 'coreBroker.ifeaturerStart() mqttServer created' ); })
-            .then(() => { this.IMqttClient.advertise( this.config().messaging ); })
-            .then(() => { return new Promise(() => {}); });
-    }
-
-    /*
-     * Get the status of the service
-     * @returns {Promise} which resolves the a status object
-     * [-implementation Api-]
-     */
-    ifeaturerStatus(){
-        const exports = this.api().exports();
-        exports.Msg.debug( 'coreBroker.ifeaturerStatus()' );
-        exports.utils.tcpRequest( this.config().listenPort, 'iz.status' )
+    ifeatureproviderStop(){
+        const exports = this.IFeatureProvider.api().exports();
+        exports.Msg.debug( 'coreBroker.ifeatureproviderStop()' );
+        exports.utils.tcpRequest( this.IFeatureProvider.feature().config().listenPort, 'iz.stop' )
             .then(( answer ) => {
-                exports.Msg.debug( 'coreBroker.ifeaturerStatus()', 'receives answer to \'iz.status\'', answer );
-            }, ( failure ) => {
-                // an error message is already sent by the called self.api().exports().utils.tcpRequest()
-                //  what more to do ??
-                //Msg.error( 'TCP error on iz.stop command:', failure );
-            });
-    }
-
-    /*
-     * @returns {Promise}
-     * [-implementation Api-]
-     */
-    ifeaturerStop(){
-        const exports = this.api().exports();
-        exports.Msg.debug( 'coreBroker.ifeaturerStop()' );
-        exports.utils.tcpRequest( this.config().listenPort, 'iz.stop' )
-            .then(( answer ) => {
-                this.api().exports().Msg.debug( 'coreBroker.ifeaturerStop()', 'receives answer to \'iz.stop\'', answer );
+                exports.Msg.debug( 'coreBroker.ifeatureproviderStop()', 'receives answer to \'iz.stop\'', answer );
             }, ( failure ) => {
                 // an error message is already sent by the called self.api().exports().utils.tcpRequest()
                 //  what more to do ??
@@ -290,12 +288,13 @@ export class coreBroker {
      * [-implementation Api-]
      */
     itcpserverListening( tcpServerStatus ){
-        const exports = this.api().exports();
+        const exports = this.IFeatureProvider.api().exports();
+        const featCard = this.IFeatureProvider.feature();
         exports.Msg.debug( 'coreBroker.itcpserverListening()' );
         const self = this;
-        const _name = this.feature().name();
-        let _msg = 'Hello, I am \''+_name+'\' '+this._class();
-        _msg += ', running with pid '+process.pid+ ', listening on port '+this.config().listenPort;
+        const _name = featCard.name();
+        let _msg = 'Hello, I am \''+_name+'\' '+featCard.class();
+        _msg += ', running with pid '+process.pid+ ', listening on port '+featCard.config().listenPort;
         this.status().then(( status ) => {
             status[_name].event = 'startup';
             status[_name].helloMessage = _msg;
@@ -312,8 +311,9 @@ export class coreBroker {
      * [-implementation Api-]
      */
     itcpserverStatsUpdated( status ){
-        this.api().exports().Msg.debug( 'coreBroker.itcpserverStatsUpdated()' );
-        const _name = this.feature().name();
+        const featProvider = this.IFeatureProvider;
+        featProvider.api().exports().Msg.debug( 'coreBroker.itcpserverStatsUpdated()' );
+        const _name = featProvider.feature().name();
         this.IRunFile.set([ _name, 'ITcpServer' ], status );
     }
 
@@ -336,8 +336,9 @@ export class coreBroker {
      *  A minimum of structure is so required, described in run-status.schema.json.
      */
     status(){
-        const exports = this.api().exports();
-        const _serviceName = this.feature().name();
+        const exports = this.IFeatureProvider.api().exports();
+        const featCard = this.IFeatureProvider.feature();
+        const _serviceName = featCard.name();
         exports.Msg.debug( 'coreBroker.status()', 'serviceName='+_serviceName );
         const self = this;
         let status = {};
@@ -345,10 +346,10 @@ export class coreBroker {
         const _runStatus = function(){
             return new Promise(( resolve, reject ) => {
                 const o = {
-                    module: self.feature().module(),
-                    class: self._class(),
+                    module: featCard.module(),
+                    class: featCard.class(),
                     pids: [ process.pid ],
-                    ports: [ self.config().listenPort, self.config().messaging.port ]
+                    ports: [ featCard.config().ITcpServer.port, featCard.config().IMqttServer.port ]
                 };
                 exports.Msg.debug( 'coreBroker.status()', 'runStatus', o );
                 status = { ...status, ...o };
@@ -361,22 +362,18 @@ export class coreBroker {
                 if( !self._started ) self._started = exports.utils.now();
                 const o = {
                     started: self._started,
-                    listenPort: self.config().listenPort,
-                    messagingPort: self.config().messaging.port,
                     // running environment
-                    environment: {
+                    env: {
                         IZTIAR_DEBUG: process.env.IZTIAR_DEBUG || '(undefined)',
-                        IZTIAR_ENV: process.env.IZTIAR_ENV || '(undefined)',
                         NODE_ENV: process.env.NODE_ENV || '(undefined)'
                     },
                     // general runtime constants
                     logfile: exports.Logger.logFname(),
                     runfile: self.IRunFile.runFile( _serviceName ),
-                    storageDir: exports.coreConfig.storageDir(),
-                    version: self.api().packet().getVersion()
+                    version: self.IFeatureProvider.api().packet().getVersion()
                 };
                 exports.Msg.debug( 'coreBroker.status()', 'brokerStatus', o );
-                status = { ...status, ...o };
+                status = { ...status, ...o, ...self.IFeatureProvider.api().config().filled() };
                 resolve( status );
             });
         };
@@ -432,7 +429,8 @@ export class coreBroker {
      *  this terminate() function. So, try to prevent a double execution.
      */
     terminate( words=[], cb=null ){
-        const exports = this.api().exports();
+        const exports = this.IFeatureProvider.api().exports();
+        const featCard = this.IFeatureProvider.feature();
         exports.Msg.debug( 'coreBroker.terminate()' );
         this.ITcpServer.status().then(( res ) => {
             if( res.status === exports.ITcpServer.s.STOPPING ){
@@ -444,8 +442,8 @@ export class coreBroker {
                 return Promise.resolve( true );
             }
         });
-        const _name = this.feature().name();
-        const _module = this.feature().module();
+        const _name = featCard.name();
+        const _module = featCard.module();
         this._forwardPort = words && words[0] && self.api().exports().utils.isInt( words[0] ) ? words[0] : 0;
 
         const self = this;
@@ -456,7 +454,7 @@ export class coreBroker {
         let _promise = Promise.resolve( true )
             .then(() => {
                 if( cb && typeof cb === 'function' ){
-                    cb({ name:_name, module:_module, class:self._class(), pid:process.pid, port:self.config().listenPort });
+                    cb({ name:_name, module:_module, class:featCard.class(), pid:process.pid, port:featCard.config().listenPort });
                 }
                 return self.ITcpServer.terminate();
             })

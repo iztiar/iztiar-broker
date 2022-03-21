@@ -1,13 +1,15 @@
 /*
  * IMqttServer interface
- *
- * The class is only instanciated and started in an already forked process.
  */
 import Aedes from 'aedes';
 import aedesStats from 'aedes-stats';
 import { createServer } from 'aedes-server-factory';
 
 export class IMqttServer {
+
+    static d = {
+        port: 24003
+    };
 
     static s = {
         STARTING: 'starting',
@@ -37,7 +39,7 @@ export class IMqttServer {
      * @returns {IMqttServer}
      */
     constructor( instance ){
-        const exports = instance.api().exports();
+        const exports = instance.IFeatureProvider.api().exports();
         exports.Msg.debug( 'IMqttServer instanciation' );
         this._instance = instance;
         this._status = IMqttServer.s.STOPPED;
@@ -45,7 +47,9 @@ export class IMqttServer {
         // if not already done, make sure the instance implements a IStatus interface
         //  and define a new status part
         const IStatus = exports.IStatus;
-        if( !instance.IStatus ) Interface.add( instance, IStatus );
+        if( !instance.IStatus ){
+            Interface.add( instance, IStatus );
+        }
         instance.IStatus.add( this._statusPart );
 
         return this;
@@ -54,7 +58,7 @@ export class IMqttServer {
     // @returns {Promise} which resolves to the status part for the IMqttServer
     _statusPart( instance ){
         const i = instance ? instance : this._instance;
-        i.api().exports().Msg.debug( 'IMqttServer.statusPart()', 'instance '+( instance ? 'set':'unset' ));
+        i.IFeatureProvider.api().exports().Msg.debug( 'IMqttServer.statusPart()', 'instance '+( instance ? 'set':'unset' ));
         const self = instance ? instance.IMqttServer : this;
         const a = {
             status: self._status,
@@ -82,7 +86,7 @@ export class IMqttServer {
      * [-implementation Api-]
      */
     _listening( status ){
-        this._instance.api().exports().Msg.debug( 'IMqttServer._listening()' );
+        this._instance.IFeatureProvider.api().exports().Msg.debug( 'IMqttServer._listening()' );
     }
 
     /* *** ***************************************************************************************
@@ -97,7 +101,7 @@ export class IMqttServer {
      * [-public API-]
      */
     create( port ){
-        const Msg = this._instance.api().exports().Msg;
+        const Msg = this._instance.IFeatureProvider.api().exports().Msg;
         Msg.debug( 'IMqttServer.create()' );
         this.status( IMqttServer.s.STARTING );
         this._mqttPort = port;
@@ -134,7 +138,7 @@ export class IMqttServer {
      * @param {Error} e exception on MQTT server listening
      */
     errorHandler( e ){
-        const Msg = this._instance.api().exports().Msg;
+        const Msg = this._instance.IFeatureProvider.api().exports().Msg;
         Msg.debug( 'IMqttServer:errorHandler()' );
         if( e.stack ){
             Msg.error( 'IMqttServer:errorHandler()', e.name, e.message );
@@ -155,12 +159,27 @@ export class IMqttServer {
     }
 
     /**
+     * Fill the configuration for this interface
+     * @param {Object} conf the full feature configuration
+     * @returns {Promise} which resolves to the filled interface configuration
+     */
+    fillConfig( conf ){
+        const exports = this._instance.IFeatureProvider.api().exports();
+        exports.Msg.debug( 'IMqttServer.fillConfig()' );
+        let _filled = conf.IMqttServer;
+        if( !_filled.port ){
+            _filled.port = IMqttServer.d.port;
+        }
+        return Promise.resolve( _filled );
+    }
+
+    /**
      * Getter/Setter
      * @param {String} newStatus the status to be set to the IMqttServer
      * @returns {Promise} which resolves to the status of this IMqttServer
      */
     status( newStatus ){
-        const Msg = this._instance.api().exports().Msg;
+        const Msg = this._instance.IFeatureProvider.api().exports().Msg;
         Msg.debug( 'IMqttServer.status()', 'status='+this._status, 'newStatus='+newStatus );
         if( newStatus && typeof newStatus === 'string' && newStatus.length && Object.values( IMqttServer.s ).includes( newStatus )){
             this._status = newStatus;
@@ -173,7 +192,7 @@ export class IMqttServer {
      * @returns {Promise} which resolves when the server is actually closed
      */
     terminate(){
-        const Msg = this._instance.api().exports().Msg;
+        const Msg = this._instance.IFeatureProvider.api().exports().Msg;
         Msg.debug( 'IMqttServer.terminate()' );
         this.status().then(( res ) => {
             if( res.status === IMqttServer.s.STOPPING ){

@@ -1,0 +1,20 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/iztiar/iztiar-core/schemas/imqtt-server.schema.json",
+    "title": "IMqttServer",
+    "description": "the configuration of the IMqttServer interface",
+    "type": "object",
+    "properties" : {
+        "IMqttServer": {
+            "type": "object",
+            "description": "the configuration group, required to be present to try to run the IMqttServer",
+            "properties": {
+                "port": {
+                    "type": "integer",
+                    "description": "the port number of the message bus",
+                    "default": 24003
+                }
+            }
+        }
+    }
+}
