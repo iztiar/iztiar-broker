@@ -11,9 +11,7 @@ export class coreBroker {
      * Default ports number
      */
     static d = {
-        listenPort: 24002,
-        messagingPort: 24003,
-        alivePeriod: 60*1000
+        listenPort: 24002
     };
 
     /**
@@ -38,7 +36,7 @@ export class coreBroker {
 
     // returns the full status of the server
     static _izStatus( self, reply ){
-        return self.status()
+        return self.publiableStatus()
             .then(( status ) => {
                 reply.answer = status;
                 return Promise.resolve( reply );
@@ -72,7 +70,7 @@ export class coreBroker {
 
         //Interface.extends( this, exports.baseService, api, card );
         Msg.debug( 'coreBroker instanciation' );
-        let _promise = this._fillConfig( api, card );
+        let _promise = this.fillConfig( api, card );
 
         // must implement the IFeatureProvider
         Interface.add( this, exports.IFeatureProvider, {
@@ -89,7 +87,7 @@ export class coreBroker {
         Interface.add( this, exports.ICapability );
 
         this.ICapability.add(
-            'checkStatus', ( o ) => { return o._checkStatus(); }
+            'checkableStatus', ( o ) => { return o.checkableStatus(); }
         );
         this.ICapability.add(
             'broker', ( o ) => { return Promise.resolve( o.IRunFile.get( card.name(), 'helloMessage' )); }
@@ -120,63 +118,12 @@ export class coreBroker {
 
         Interface.add( this, exports.ITcpServer, {
             _listening: this.itcpserverListening,
-            _statsUpdated: this.itcpserverStatsUpdated,
             _verbs: this.itcpserverVerbs
         });
         _promise = _promise.then(() => { Interface.fillConfig( this, 'ITcpServer' ); });
 
-        /*
-        let _promise = Promise.resolve( true )
-            .then(() => { return this._filledConfig(); })
-            .then(( o ) => { return card.config( o ); })
-            
-            */
         _promise = _promise.then(() => { return Promise.resolve( this ); });
-
         return _promise;
-    }
-
-    /*
-     * @returns {Promise} which must resolve to an object conform to check-status.schema.json
-     * [-implementation Api-]
-     */
-    _checkStatus(){
-        const exports = this.IFeatureProvider.api().exports();
-        exports.Msg.debug( 'coreBroker._checkStatus()' );
-        const _name = this.IFeatureProvider.feature().name();
-        const _json = this.IRunFile.jsonByName( _name );
-        let o = new exports.Checkable();
-        if( _json && _json[_name] ){
-            o.pids = [ ... _json[_name].pids ];
-            o.ports = [ _json[_name].ITcpServer.port ];
-            o.startable = o.pids.length === 0 && o.ports.length === 0;
-        } else {
-            o.startable = true;
-        }
-        return Promise.resolve( o );
-    }
-
-    /*
-     * @param {engineApi} api the engine API as described in engine-api.schema.json
-     * @param {featureCard} card a description of this feature
-     * @returns {Promise} which resolves to the filled feature part configuration
-     * Note:
-     *  This class aims to provide a IMqttServer.
-     *  As a consequence, and even if it is not specified in the configuration, we will also have a IMqttClient
-     */
-    _fillConfig( api, card ){
-        api.exports().Msg.debug( 'coreBroker.fillConfig()' );
-        let _filled = { ...card.config() };
-        if( !_filled.class ){
-            _filled.class = this.constructor.name;
-        }
-        if( !Object.keys( _filled ).includes( 'enabled' )){
-            _filled.enabled = true;
-        }
-        if( Object.keys( _filled ).includes( 'IMqttServer' ) && !Object.keys( _filled ).includes( 'IMqttClient' )){
-            _filled.IMqttClient = {};
-        }
-        return Promise.resolve( card.config( _filled ));
     }
 
     /*
@@ -265,7 +212,7 @@ export class coreBroker {
      * [-implementation Api-]
      */
     _imqttclientStatus(){
-        return this.status().then(( res ) => {
+        return this.publiableStatus().then(( res ) => {
             const name = Object.keys( res )[0];
             return res[name];
         });
@@ -291,31 +238,43 @@ export class coreBroker {
         const exports = this.IFeatureProvider.api().exports();
         const featCard = this.IFeatureProvider.feature();
         exports.Msg.debug( 'coreBroker.itcpserverListening()' );
-        const self = this;
         const _name = featCard.name();
+        const _port = featCard.config().ITcpServer.port;
         let _msg = 'Hello, I am \''+_name+'\' '+featCard.class();
-        _msg += ', running with pid '+process.pid+ ', listening on port '+featCard.config().ITcpServer.port;
-        this.status().then(( status ) => {
-            status[_name].event = 'startup';
-            status[_name].helloMessage = _msg;
-            status[_name].status = 'running';
-            //console.log( 'itcpserverListening() status', status );
-            self.IRunFile.set( _name, status );
-            self.IForkable.advertiseParent( status );
-        });
+        _msg += ', running with pid '+process.pid+ ', listening on port '+_port;
+        let st = new exports.Checkable();
+        st.pids = [ process.pid ];
+        st.ports = [ _port ];
+        let status = {};
+        status[_name] = {
+            module: featCard.module(),
+            class: featCard.class(),
+            ... st,
+            event: 'startup',
+            helloMessage: _msg,
+            status: 'running'
+        };
+        //console.log( 'itcpserverListening() status', status );
+        this.IRunFile.set( _name, status );
+        this.IForkable.advertiseParent( status );
     }
 
     /*
      * Internal stats have been modified
      * @param {Object} status of the ITcpServer
      * [-implementation Api-]
+     * Note:
+     *  As of v0.x, ITcpServer stats are preferably published in the MQTT alive message.
+     *  Keep the runfile as light as possible.
      */
+    /*
     itcpserverStatsUpdated( status ){
         const featProvider = this.IFeatureProvider;
         featProvider.api().exports().Msg.debug( 'coreBroker.itcpserverStatsUpdated()' );
         const _name = featProvider.feature().name();
         this.IRunFile.set([ _name, 'ITcpServer' ], status );
     }
+    */
 
     /*
      * @returns {Object[]} the list of implemented commands provided by the interface implementation
@@ -326,20 +285,65 @@ export class coreBroker {
         return coreBroker.verbs;
     }
 
+    /*
+     * @returns {Promise} which must resolve to an object conform to check-status.schema.json
+     */
+    checkableStatus(){
+        const exports = this.IFeatureProvider.api().exports();
+        exports.Msg.debug( 'coreBroker.checkableStatus()' );
+        const _name = this.IFeatureProvider.feature().name();
+        const _json = this.IRunFile.jsonByName( _name );
+        let o = new exports.Checkable();
+        if( _json && _json[_name] ){
+            o.pids = _json[_name].pids;
+            o.ports = _json[_name].ports;
+            o.startable = o.pids.length === 0 && o.ports.length === 0;
+        } else {
+            o.startable = true;
+        }
+        return Promise.resolve( o );
+    }
+
+    /*
+     * @param {engineApi} api the engine API as described in engine-api.schema.json
+     * @param {featureCard} card a description of this feature
+     * @returns {Promise} which resolves to the filled feature part configuration
+     * Note:
+     *  This class aims to provide a IMqttServer.
+     *  As a consequence, and even if it is not specified in the configuration, we will also have a IMqttClient
+     * Note:
+     *  We provide our own default for ITcpServer port to not use the common value
+     */
+    fillConfig( api, card ){
+        api.exports().Msg.debug( 'coreBroker.fillConfig()' );
+        let _filled = { ...card.config() };
+        if( !_filled.class ){
+            _filled.class = this.constructor.name;
+        }
+        if( !Object.keys( _filled ).includes( 'enabled' )){
+            _filled.enabled = true;
+        }
+        if( Object.keys( _filled ).includes( 'IMqttServer' ) && !Object.keys( _filled ).includes( 'IMqttClient' )){
+            _filled.IMqttClient = {};
+        }
+        if( Object.keys( _filled ).includes( 'ITcpServer' ) && !Object.keys( _filled.ITcpServer ).includes( 'port' )){
+            _filled.ITcpServer.port = coreBroker.d.listenPort;
+        }
+        return Promise.resolve( card.config( _filled ));
+    }
+
     /**
      * @returns {Promise} which resolves to a status Object
      * Note:
-     *  The object returned by this function (aka the 'status' object) is used not only as the answer
-     *  to any 'iz.status' TCP request, but also:
-     *  - at startup, when advertising the main process, to display the startup message on the console
-     *  - after startup, to write into the IRunFile.
-     *  A minimum of structure is so required, described in run-status.schema.json.
+     *  The object returned by this function (aka the 'status' object) is used:
+     *  - as the answer to the 'iz.status' TCP request
+     *  - by the IMQttClient when publishing its 'alive' message
      */
-    status(){
+    publiableStatus(){
         const exports = this.IFeatureProvider.api().exports();
         const featCard = this.IFeatureProvider.feature();
         const _serviceName = featCard.name();
-        exports.Msg.debug( 'coreBroker.status()', 'serviceName='+_serviceName );
+        exports.Msg.debug( 'coreBroker.publiableStatus()', 'serviceName='+_serviceName );
         const self = this;
         let status = {};
         // run-status.schema.json (a bit extended here)
@@ -354,7 +358,7 @@ export class coreBroker {
                     runfile: self.IRunFile.runFile( _serviceName ),
                     started: self._started
                 };
-                exports.Msg.debug( 'coreBroker.status()', 'runStatus', o );
+                exports.Msg.debug( 'coreBroker.publiableStatus()', 'runStatus', o );
                 status = { ...status, ...o };
                 resolve( status );
             });
@@ -369,7 +373,7 @@ export class coreBroker {
                         ctime: res.ctime,
                         elapsed: res.elapsed
                     };
-                    exports.Msg.debug( 'coreBroker.status()', 'pidUsage', o );
+                    exports.Msg.debug( 'coreBroker.publiableStatus()', 'pidUsage', o );
                     status.pidUsage = { ...o };
                     return Promise.resolve( status );
                 });
@@ -381,7 +385,7 @@ export class coreBroker {
             .then(( res ) => {
                 let featureStatus = {};
                 featureStatus[_serviceName] = res;
-                //console.log( 'coreController.status() featureStatus', featureStatus );
+                //console.log( 'coreController.publiableStatus() featureStatus', featureStatus );
                 return Promise.resolve( featureStatus );
             });
     }
@@ -424,7 +428,7 @@ export class coreBroker {
         let _promise = Promise.resolve( true )
             .then(() => {
                 if( cb && typeof cb === 'function' ){
-                    cb({ name:_name, module:_module, class:featCard.class(), pid:process.pid, port:featCard.config().listenPort });
+                    cb({ name:_name, module:_module, class:featCard.class(), pid:process.pid, port:featCard.config().ITcpServer.port });
                 }
                 return self.ITcpServer.terminate();
             })

@@ -32,7 +32,7 @@
                 },
                 "ITcpServer": {
                     "type": "object",
-                    "description": "TCP server options (see ITcpServer schema)"
+                    "description": "TCP server options (see ITcpServer schema); default port being set here to 24002"
                 }
             }
         }
