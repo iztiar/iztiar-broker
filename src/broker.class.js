@@ -15,7 +15,7 @@ export class coreBroker {
     };
 
     /**
-     * The commands which can be received by the coreController via the TCP communication port
+     * The commands which can be received by the coreBroker via the TCP communication port
      * - keys are the commands
      *   > label {string} a short help message
      *   > fn {Function} the execution function (cf. above)
@@ -70,9 +70,9 @@ export class coreBroker {
 
         //Interface.extends( this, exports.baseService, api, card );
         Msg.debug( 'coreBroker instanciation' );
-        let _promise = this.fillConfig( api, card );
 
         // must implement the IFeatureProvider
+        //  should implement that first so that we can install the engineApi and the featureCard as soon as possible
         Interface.add( this, exports.IFeatureProvider, {
             forkable: this.ifeatureproviderForkable,
             killed: this.ifeatureproviderKilled,
@@ -82,58 +82,83 @@ export class coreBroker {
         });
         this.IFeatureProvider.api( api );
         this.IFeatureProvider.feature( card );
-        _promise = _promise.then(() => { Interface.fillConfig( this, 'IFeatureProvider' ); });
 
-        // add this rather sooner, so that other interfaces may take advantage of it
-        Interface.add( this, exports.ICapability );
+        let _promise = this._fillConfig()
+            .then(() => {
+                // add this rather sooner, so that other interfaces may take advantage of it
+                Interface.add( this, exports.ICapability );
+                this.ICapability.add(
+                    'checkableStatus', ( o ) => { return o.checkableStatus(); }
+                );
+                this.ICapability.add(
+                    'broker', ( o ) => { return Promise.resolve( o.IRunFile.get( card.name(), 'helloMessage' )); }
+                );
+                this.ICapability.add(
+                    'helloMessage', ( o, cap ) => { return Promise.resolve( o.IRunFile.get( card.name(), cap )); }
+                );
+                return Interface.fillConfig( this, 'ICapability' );
+            })
+            .then(() => {
+                Interface.add( this, exports.IForkable, {
+                    _terminate: this.iforkableTerminate
+                });
+                return Interface.fillConfig( this, 'IForkable' );
+            })
+            .then(() => {
+                // declare IMqttServer before IMqttClient because the former forces the presence of the later
+                Interface.add( this, IMqttServer );
+                return Interface.fillConfig( this, 'IMqttServer' );
+            })
+            .then(() => {
+                Interface.add( this, exports.IMqttClient, {
+                    _status: this._imqttclientStatus
+                });
+                return Interface.fillConfig( this, 'IMqttClient' );
+            })
+            .then(() => {
+                Interface.add( this, exports.IRunFile, {
+                    runDir: this.irunfileRunDir
+                });
+                _promise = _promise.then(() => { Interface.fillConfig( this, 'IRunFile' ); });
+            })
+            .then(() => {
+                Interface.add( this, exports.ITcpServer, {
+                    _listening: this.itcpserverListening,
+                    _verbs: this.itcpserverVerbs
+                });
+                _promise = _promise.then(() => { Interface.fillConfig( this, 'ITcpServer' ); });
+            })
+            .then(() => { return Promise.resolve( this ); });
 
-        this.ICapability.add(
-            'checkableStatus', ( o ) => { return o.checkableStatus(); }
-        );
-        this.ICapability.add(
-            'broker', ( o ) => { return Promise.resolve( o.IRunFile.get( card.name(), 'helloMessage' )); }
-        );
-        this.ICapability.add(
-            'helloMessage', ( o, cap ) => { return Promise.resolve( o.IRunFile.get( card.name(), cap )); }
-        );
-        _promise = _promise.then(() => { Interface.fillConfig( this, 'ICapability' ); });
-
-        Interface.add( this, exports.IForkable, {
-            _terminate: this.iforkableTerminate
-        });
-        _promise = _promise.then(() => { Interface.fillConfig( this, 'IForkable' ); });
-
-        // declare IMqttServer before IMqttClient because the former forces the presence of the later
-        Interface.add( this, IMqttServer );
-        _promise = _promise.then(() => { Interface.fillConfig( this, 'IMqttServer' ); });
-
-        Interface.add( this, exports.IMqttClient, {
-            _status: this._imqttclientStatus
-        });
-        _promise = _promise.then(() => { Interface.fillConfig( this, 'IMqttClient' ); });
-
-        Interface.add( this, exports.IRunFile, {
-            runDir: this.irunfileRunDir
-        });
-        _promise = _promise.then(() => { Interface.fillConfig( this, 'IRunFile' ); });
-
-        Interface.add( this, exports.ITcpServer, {
-            _listening: this.itcpserverListening,
-            _verbs: this.itcpserverVerbs
-        });
-        _promise = _promise.then(() => { Interface.fillConfig( this, 'ITcpServer' ); });
-
-        _promise = _promise.then(() => { return Promise.resolve( this ); });
         return _promise;
     }
 
     /*
-     * @returns {Object} the filled configuration for the feature
-     * [-implementation Api-]
+     * @returns {Promise} which resolves to the filled feature configuration
+     * Note:
+     *  This class aims to provide a IMqttServer.
+     *  As a consequence, and even if it is not specified in the configuration, we will also have a IMqttClient
+     * Note:
+     *  We provide our own default for ITcpServer port to not use the common value
      */
-    ifeatureproviderConfig(){
-        this.IFeatureProvider.api().exports().Msg.debug( 'coreBroker.ifeatureproviderConfig()', this.IFeatureProvider.feature().config());
-        return this.IFeatureProvider.feature().config();
+    _fillConfig(){
+        if( !this.IFeatureProvider ){
+            throw new Error( 'IFeatureProvider is expected to have been instanciated before calling this function' );
+        }
+        const exports = this.IFeatureProvider.api().exports();
+        exports.Msg.debug( 'coreBroker.fillConfig()' );
+        const feature = this.IFeatureProvider.feature();
+        let _filled = { ...feature.config() };
+        if( !_filled.class ){
+            _filled.class = this.constructor.name;
+        }
+        if( Object.keys( _filled ).includes( 'IMqttServer' ) && !Object.keys( _filled ).includes( 'IMqttClient' )){
+            _filled.IMqttClient = {};
+        }
+        if( Object.keys( _filled ).includes( 'ITcpServer' ) && !Object.keys( _filled.ITcpServer ).includes( 'port' )){
+            _filled.ITcpServer.port = coreBroker.d.listenPort;
+        }
+        return Promise.resolve( feature.config( this.IFeatureProvider.fillConfig( _filled )));
     }
 
     /*
@@ -322,34 +347,6 @@ export class coreBroker {
             o.startable = true;
         }
         return Promise.resolve( o );
-    }
-
-    /*
-     * @param {engineApi} api the engine API as described in engine-api.schema.json
-     * @param {featureCard} card a description of this feature
-     * @returns {Promise} which resolves to the filled feature part configuration
-     * Note:
-     *  This class aims to provide a IMqttServer.
-     *  As a consequence, and even if it is not specified in the configuration, we will also have a IMqttClient
-     * Note:
-     *  We provide our own default for ITcpServer port to not use the common value
-     */
-    fillConfig( api, card ){
-        api.exports().Msg.debug( 'coreBroker.fillConfig()' );
-        let _filled = { ...card.config() };
-        if( !_filled.class ){
-            _filled.class = this.constructor.name;
-        }
-        if( !Object.keys( _filled ).includes( 'enabled' )){
-            _filled.enabled = true;
-        }
-        if( Object.keys( _filled ).includes( 'IMqttServer' ) && !Object.keys( _filled ).includes( 'IMqttClient' )){
-            _filled.IMqttClient = {};
-        }
-        if( Object.keys( _filled ).includes( 'ITcpServer' ) && !Object.keys( _filled.ITcpServer ).includes( 'port' )){
-            _filled.ITcpServer.port = coreBroker.d.listenPort;
-        }
-        return Promise.resolve( card.config( _filled ));
     }
 
     /**
