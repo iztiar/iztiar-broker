@@ -24,7 +24,7 @@ export class coreBroker {
      */
     static verbs = {
         'iz.status': {
-            label: 'returns the status of this coreBroker service',
+            label: 'return the status of this coreBroker service',
             fn: coreBroker._izStatus
         },
         'iz.stop': {
@@ -74,6 +74,7 @@ export class coreBroker {
 
         // must implement the IFeatureProvider
         Interface.add( this, exports.IFeatureProvider, {
+            forkable: this.ifeatureproviderForkable,
             killed: this.ifeatureproviderKilled,
             start: this.ifeatureproviderStart,
             status: this.ifeatureproviderStatus,
@@ -136,6 +137,15 @@ export class coreBroker {
     }
 
     /*
+     * @returns {Boolean} true if the process must be forked
+     * [-implementation Api-]
+     */
+    ifeatureproviderForkable(){
+        this.IFeatureProvider.api().exports().Msg.debug( 'coreBroker.ifeatureproviderForkable()' );
+        return true;
+    }
+
+    /*
      * If the service had to be SIGKILL'ed to be stoppped, then gives it an opportunity to make some cleanup
      * [-implementation Api-]
      */
@@ -145,20 +155,30 @@ export class coreBroker {
     }
 
     /*
+     * @param {String} name the name of the feature
+     * @param {Callback|null} cb the funtion to be called on IPC messages reception (only relevant if a process is forked)
+     * @param {String[]} args arguments list (only relevant if a process is forked)
      * @returns {Promise}
+     *  - which never resolves in the forked process (server hosting) so never let the program exits
+     *  - which resolves to the forked child process in the main process
      * [-implementation Api-]
      */
-    ifeatureproviderStart(){
+    ifeatureproviderStart( name, cb, args ){
         const exports = this.IFeatureProvider.api().exports();
-        const featCard = this.IFeatureProvider.feature();
-        exports.Msg.debug( 'coreBroker.ifeatureproviderStart()', 'forkedProcess='+exports.IForkable.forkedProcess());
-        return Promise.resolve( true )
-            .then(() => { return this.ITcpServer.create( featCard.config().ITcpServer.port ); })
-            .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() tcpServer created' ); })
-            .then(() => { return this.IMqttServer.create( featCard.config().IMqttServer.port ); })
-            .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() mqttServer created' ); })
-            .then(() => { this.IMqttClient.advertise( featCard.config().IMqttClient ); })
-            .then(() => { return new Promise(() => {}); });
+        const _forked = exports.IForkable.forkedProcess();
+        exports.Msg.debug( 'coreBroker.ifeatureproviderStart()', 'forkedProcess='+_forked );
+        if( _forked ){
+            const featCard = this.IFeatureProvider.feature();
+            return Promise.resolve( true )
+                .then(() => { return this.ITcpServer.create( featCard.config().ITcpServer.port ); })
+                .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() tcpServer created' ); })
+                .then(() => { return this.IMqttServer.create( featCard.config().IMqttServer.port ); })
+                .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() mqttServer created' ); })
+                .then(() => { this.IMqttClient.advertise( featCard.config().IMqttClient ); })
+                .then(() => { return new Promise(() => {}); });
+        } else {
+            return Promise.resolve( exports.IForkable.fork( name, cb, args ));
+        }
     }
 
     /*
@@ -236,8 +256,8 @@ export class coreBroker {
      */
     itcpserverListening( tcpServerStatus ){
         const exports = this.IFeatureProvider.api().exports();
-        const featCard = this.IFeatureProvider.feature();
         exports.Msg.debug( 'coreBroker.itcpserverListening()' );
+        const featCard = this.IFeatureProvider.feature();
         const _name = featCard.name();
         const _port = featCard.config().ITcpServer.port;
         let _msg = 'Hello, I am \''+_name+'\' '+featCard.class();
