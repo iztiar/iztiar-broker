@@ -290,6 +290,8 @@ export class coreBroker {
         let st = new exports.Checkable();
         st.pids = [ process.pid ];
         st.ports = [ _port ];
+        delete st.startable;
+        delete st.reasons;
         let status = {};
         status[_name] = {
             module: featCard.module(),
