@@ -195,9 +195,9 @@ export class coreBroker {
         if( _forked ){
             const featCard = this.IFeatureProvider.feature();
             return Promise.resolve( true )
-                .then(() => { return this.ITcpServer.create( featCard.config().ITcpServer.port ); })
+                .then(() => { this.ITcpServer.create( featCard.config().ITcpServer.port ); })
                 .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() tcpServer created' ); })
-                .then(() => { return this.IMqttServer.create( featCard.config().IMqttServer.port ); })
+                .then(() => { this.IMqttServer.create( featCard.config().IMqttServer.port ); })
                 .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() mqttServer created' ); })
                 .then(() => { this.IMqttClient.advertise( featCard.config().IMqttClient ); })
                 .then(() => { return new Promise(() => {}); });
