@@ -1,8 +1,6 @@
 /*
  * coreBroker class
  */
-import pidUsage from 'pidusage';
-
 import { IMqttServer } from './imports.js';
 
 export class coreBroker {
@@ -149,16 +147,13 @@ export class coreBroker {
         exports.Msg.debug( 'coreBroker.fillConfig()' );
         const feature = this.IFeatureProvider.feature();
         let _filled = { ...feature.config() };
-        if( !_filled.class ){
-            _filled.class = this.constructor.name;
-        }
         if( Object.keys( _filled ).includes( 'IMqttServer' ) && !Object.keys( _filled ).includes( 'IMqttClient' )){
             _filled.IMqttClient = {};
         }
         if( Object.keys( _filled ).includes( 'ITcpServer' ) && !Object.keys( _filled.ITcpServer ).includes( 'port' )){
             _filled.ITcpServer.port = coreBroker.d.listenPort;
         }
-        return Promise.resolve( feature.config( this.IFeatureProvider.fillConfig( _filled )));
+        return this.IFeatureProvider.fillConfig( _filled ).then(( c ) => { return feature.config( c ); });
     }
 
     /*
@@ -382,24 +377,8 @@ export class coreBroker {
                 resolve( status );
             });
         };
-        // pidUsage
-        const _pidPromise = function(){
-            return pidUsage( process.pid )
-                .then(( res ) => {
-                    const o = {
-                        cpu: res.cpu,
-                        memory: res.memory,
-                        ctime: res.ctime,
-                        elapsed: res.elapsed
-                    };
-                    exports.Msg.debug( 'coreBroker.publiableStatus()', 'pidUsage', o );
-                    status.pidUsage = { ...o };
-                    return Promise.resolve( status );
-                });
-        };
         return Promise.resolve( true )
             .then(() => { return _runStatus(); })
-            .then(() => { return _pidPromise(); })
             .then(() => { return this.IStatus ? this.IStatus.run( status ) : status; })
             .then(( res ) => {
                 let featureStatus = {};
