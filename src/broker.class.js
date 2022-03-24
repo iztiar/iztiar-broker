@@ -122,8 +122,7 @@ export class coreBroker {
             })
             .then(() => {
                 Interface.add( this, exports.ITcpServer, {
-                    _listening: this.itcpserverListening,
-                    _verbs: this.itcpserverVerbs
+                    v_listening: this.itcpserverListening
                 });
                 _promise = _promise.then(() => { Interface.fillConfig( this, 'ITcpServer' ); });
             })
@@ -334,15 +333,6 @@ export class coreBroker {
         this.IRunFile.set([ _name, 'ITcpServer' ], status );
     }
     */
-
-    /*
-     * @returns {Object[]} the list of implemented commands provided by the interface implementation
-     *  cf. tcp-server-command.schema.json
-     * [-implementation Api-]
-     */
-    itcpserverVerbs(){
-        return coreBroker.verbs;
-    }
 
     /*
      * @returns {Promise} which must resolve to an object conform to check-status.schema.json
