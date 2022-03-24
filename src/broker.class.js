@@ -110,7 +110,7 @@ export class coreBroker {
             })
             .then(() => {
                 Interface.add( this, exports.IMqttClient, {
-                    _status: this._imqttclientStatus
+                    v_status: this._imqttclientStatus
                 });
                 return Interface.fillConfig( this, 'IMqttClient' );
             })
