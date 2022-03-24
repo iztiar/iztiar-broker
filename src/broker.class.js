@@ -116,7 +116,7 @@ export class coreBroker {
             })
             .then(() => {
                 Interface.add( this, exports.IRunFile, {
-                    runDir: this.irunfileRunDir
+                    v_runDir: this.irunfileRunDir
                 });
                 _promise = _promise.then(() => { Interface.fillConfig( this, 'IRunFile' ); });
             })
