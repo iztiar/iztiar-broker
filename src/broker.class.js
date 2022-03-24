@@ -99,7 +99,7 @@ export class coreBroker {
             })
             .then(() => {
                 Interface.add( this, exports.IForkable, {
-                    _terminate: this.iforkableTerminate
+                    v_terminate: this.iforkableTerminate
                 });
                 return Interface.fillConfig( this, 'IForkable' );
             })
