@@ -72,11 +72,12 @@ export class coreBroker {
         // must implement the IFeatureProvider
         //  should implement that first so that we can install the engineApi and the featureCard as soon as possible
         Interface.add( this, exports.IFeatureProvider, {
-            forkable: this.ifeatureproviderForkable,
-            killed: this.ifeatureproviderKilled,
-            start: this.ifeatureproviderStart,
-            status: this.ifeatureproviderStatus,
-            stop: this.ifeatureproviderStop
+            v_featureInitialized: this.ifeatureproviderFeatureInitialized,
+            v_forkable: this.ifeatureproviderForkable,
+            v_killed: this.ifeatureproviderKilled,
+            v_start: this.ifeatureproviderStart,
+            v_status: this.ifeatureproviderStatus,
+            v_stop: this.ifeatureproviderStop
         });
         this.IFeatureProvider.api( api );
         this.IFeatureProvider.feature( card );
@@ -154,6 +155,22 @@ export class coreBroker {
             _filled.ITcpServer.port = coreBroker.d.listenPort;
         }
         return this.IFeatureProvider.fillConfig( _filled ).then(( c ) => { return feature.config( c ); });
+    }
+
+    /*
+     * Called on each and every loaded add-on when the main hosting feature has terminated with its initialization
+     * Time, for example, to increment all interfaces we are now sure they are actually implemented
+     * Here: add verbs to ITcpServer
+     */
+    ifeatureproviderFeatureInitialized(){
+        const exports = this.IFeatureProvider.api().exports();
+        exports.Msg.debug( 'coreBroker.ifeatureproviderFeatureInitialized()' );
+        const self = this;
+        Object.keys( coreBroker.verbs ).every(( key ) => {
+            const o = coreBroker.verbs[key];
+            self.ITcpServer.add( key, o.label, o.fn, o.end ? o.end : false );
+            return true;
+        });
     }
 
     /*
