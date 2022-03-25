@@ -110,7 +110,7 @@ export class coreBroker {
             })
             .then(() => {
                 Interface.add( this, exports.IMqttClient, {
-                    v_status: this._imqttclientStatus
+                    v_alive: this.imqttclientAlive
                 });
                 return Interface.fillConfig( this, 'IMqttClient' );
             })
@@ -262,12 +262,12 @@ export class coreBroker {
         return this.terminate();
     }
 
-    /**
-     * @returns {Promise} which resolves to the status of the service
-     * we want here remove the first key because it is useless as part of the topic
+    /*
+     * @returns {Promise} which resolves to the payload of the 'alive' message
+     * we want here publish the content of our status (without the 'name' top key)
      * [-implementation Api-]
      */
-    _imqttclientStatus(){
+    imqttclientAlive(){
         return this.publiableStatus().then(( res ) => {
             const name = Object.keys( res )[0];
             return res[name];
