@@ -72,11 +72,12 @@ export class coreBroker {
         // must implement the IFeatureProvider
         //  should implement that first so that we can install the engineApi and the featureCard as soon as possible
         Interface.add( this, exports.IFeatureProvider, {
-            forkable: this.ifeatureproviderForkable,
-            killed: this.ifeatureproviderKilled,
-            start: this.ifeatureproviderStart,
-            status: this.ifeatureproviderStatus,
-            stop: this.ifeatureproviderStop
+            v_featureInitialized: this.ifeatureproviderFeatureInitialized,
+            v_forkable: this.ifeatureproviderForkable,
+            v_killed: this.ifeatureproviderKilled,
+            v_start: this.ifeatureproviderStart,
+            v_status: this.ifeatureproviderStatus,
+            v_stop: this.ifeatureproviderStop
         });
         this.IFeatureProvider.api( api );
         this.IFeatureProvider.feature( card );
@@ -98,7 +99,7 @@ export class coreBroker {
             })
             .then(() => {
                 Interface.add( this, exports.IForkable, {
-                    _terminate: this.iforkableTerminate
+                    v_terminate: this.iforkableTerminate
                 });
                 return Interface.fillConfig( this, 'IForkable' );
             })
@@ -109,20 +110,19 @@ export class coreBroker {
             })
             .then(() => {
                 Interface.add( this, exports.IMqttClient, {
-                    _status: this._imqttclientStatus
+                    v_alive: this.imqttclientAlive
                 });
                 return Interface.fillConfig( this, 'IMqttClient' );
             })
             .then(() => {
                 Interface.add( this, exports.IRunFile, {
-                    runDir: this.irunfileRunDir
+                    v_runDir: this.irunfileRunDir
                 });
                 _promise = _promise.then(() => { Interface.fillConfig( this, 'IRunFile' ); });
             })
             .then(() => {
                 Interface.add( this, exports.ITcpServer, {
-                    _listening: this.itcpserverListening,
-                    _verbs: this.itcpserverVerbs
+                    v_listening: this.itcpserverListening
                 });
                 _promise = _promise.then(() => { Interface.fillConfig( this, 'ITcpServer' ); });
             })
@@ -154,6 +154,22 @@ export class coreBroker {
             _filled.ITcpServer.port = coreBroker.d.listenPort;
         }
         return this.IFeatureProvider.fillConfig( _filled ).then(( c ) => { return feature.config( c ); });
+    }
+
+    /*
+     * Called on each and every loaded add-on when the main hosting feature has terminated with its initialization
+     * Time, for example, to increment all interfaces we are now sure they are actually implemented
+     * Here: add verbs to ITcpServer
+     */
+    ifeatureproviderFeatureInitialized(){
+        const exports = this.IFeatureProvider.api().exports();
+        exports.Msg.debug( 'coreBroker.ifeatureproviderFeatureInitialized()' );
+        const self = this;
+        Object.keys( coreBroker.verbs ).every(( key ) => {
+            const o = coreBroker.verbs[key];
+            self.ITcpServer.add( key, o.label, o.fn, o.end ? o.end : false );
+            return true;
+        });
     }
 
     /*
@@ -246,12 +262,12 @@ export class coreBroker {
         return this.terminate();
     }
 
-    /**
-     * @returns {Promise} which resolves to the status of the service
-     * we want here remove the first key because it is useless as part of the topic
+    /*
+     * @returns {Promise} which resolves to the payload of the 'alive' message
+     * we want here publish the content of our status (without the 'name' top key)
      * [-implementation Api-]
      */
-    _imqttclientStatus(){
+    imqttclientAlive(){
         return this.publiableStatus().then(( res ) => {
             const name = Object.keys( res )[0];
             return res[name];
@@ -317,15 +333,6 @@ export class coreBroker {
         this.IRunFile.set([ _name, 'ITcpServer' ], status );
     }
     */
-
-    /*
-     * @returns {Object[]} the list of implemented commands provided by the interface implementation
-     *  cf. tcp-server-command.schema.json
-     * [-implementation Api-]
-     */
-    itcpserverVerbs(){
-        return coreBroker.verbs;
-    }
 
     /*
      * @returns {Promise} which must resolve to an object conform to check-status.schema.json
