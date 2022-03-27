@@ -44,13 +44,8 @@ export class IMqttServer {
         this._instance = instance;
         this._status = IMqttServer.s.STOPPED;
 
-        // if not already done, make sure the instance implements a IStatus interface
-        //  and define a new status part
-        const IStatus = exports.IStatus;
-        if( !instance.IStatus ){
-            Interface.add( instance, IStatus );
-        }
-        instance.IStatus.add( this._statusPart );
+        // provide a status part
+        exports.IStatus.add( instance, this._statusPart );
 
         return this;
     }
