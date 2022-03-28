@@ -4,6 +4,8 @@
 import Aedes from 'aedes';
 import aedesStats from 'aedes-stats';
 import { createServer } from 'aedes-server-factory';
+import fs from 'fs';
+import path from 'path';
 
 export class IMqttServer {
 
@@ -26,6 +28,9 @@ export class IMqttServer {
 
     // messaging server
     _mqttServer = null;
+    _serverKey = null;
+    _serverCert = null;
+    _rootCACert = null;
 
     // messaging port
     _mqttPort = null;
@@ -109,7 +114,15 @@ export class IMqttServer {
 
         // start mqtt aka messaging server
         if( !this._mqttServer ){
-            this._mqttServer = createServer( this._aedesServer );
+            this._mqttServer = createServer( this._aedesServer, {
+                tls: {
+                    enableTrace: true,
+                    requestCert: true,
+                    ca: this._rootCACert,
+                    key: this._serverKey,
+                    cert: this._serverCert
+                }
+            });
         }
 
         this._mqttServer
@@ -157,6 +170,7 @@ export class IMqttServer {
      * Fill the configuration for this interface
      * @param {Object} conf the full feature configuration
      * @returns {Promise} which resolves to the filled interface configuration
+     * @throws {Error} if TLS properties are not here
      */
     fillConfig( conf ){
         const exports = this._instance.IFeatureProvider.api().exports();
@@ -165,6 +179,19 @@ export class IMqttServer {
         if( !_filled.port ){
             _filled.port = IMqttServer.d.port;
         }
+        // starting with v0.7.0, IMqttServer requires TLS connections
+        // reading server key and cert files may also throw exceptions, which is acceptable here
+        if( !_filled.certs || !_filled.certs.server || !_filled.certs.server.key || !_filled.certs.server.cert ){
+            throw new Error( 'IMqttServer requires both private key and certificate for the server' );
+        }
+        this._serverKey = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.certs.server.key ));
+        this._serverCert = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.certs.server.cert ))
+        // at the moment, we consider that all managed certificate are signed by our own self-signed root CA
+        if( !_filled.certs.rootCA ){
+            throw new Error( 'root CA is not specified' );
+        }
+        this._rootCACert = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.certs.rootCA ))
+
         return Promise.resolve( _filled );
     }
 
