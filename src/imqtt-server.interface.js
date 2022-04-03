@@ -10,6 +10,8 @@ import path from 'path';
 export class IMqttServer {
 
     static d = {
+        proto: 'mqtts',
+        host: 'localhost',
         port: 24003
     };
 
@@ -55,6 +57,37 @@ export class IMqttServer {
         return this;
     }
 
+    // try to build the URI which will address the broker
+    // @param {Object} conf this feature configuration
+    // @returns {Promise} which resolves to provided conf
+    _fillConfigURI( conf ){
+        const exports = this._instance.IFeatureProvider.api().exports();
+        let _promise = Promise.resolve( conf );
+        // an URI may be specified, will be directly used by MQTT.connect()
+        if( Object.keys( conf ).includes( 'uri' )){
+            let url = new URL( conf.uri );
+            conf.proto = url.protocol;
+            conf.host = url.hostname;
+            conf.port = url.port;
+        // as a last chance we try to build an URI from proto+host+port
+        //  note that default host is 'localhost'
+        //  but TLS requires that the clients connect with the same exact host that the server declares in its own certificate
+        //  so that might not be a suitable default value
+        } else {
+            if( !conf.proto ){
+                conf.proto = IMqttServer.d.proto;
+            }
+            if( !conf.host ){
+                conf.host = IMqttServer.d.host;
+            }
+            if( !conf.port ){
+                conf.port = IMqttServer.d.port;
+            }
+            conf.uri = conf.proto + '://' + conf.host + ':' + conf.port;
+        }
+        return conf;
+    }
+
     // @returns {Promise} which resolves to the status part for the IMqttServer
     _statusPart( instance ){
         const i = instance ? instance : this._instance;
@@ -85,8 +118,8 @@ export class IMqttServer {
      * @param {Object} status of the ITcpServer
      * [-implementation Api-]
      */
-    _listening( status ){
-        this._instance.IFeatureProvider.api().exports().Msg.debug( 'IMqttServer._listening()' );
+    v_listening( status ){
+        this._instance.IFeatureProvider.api().exports().Msg.debug( 'IMqttServer.v_listening()' );
     }
 
     /* *** ***************************************************************************************
@@ -135,7 +168,7 @@ export class IMqttServer {
         return new Promise(( resolve, reject ) => {
             self._mqttServer.listen( self._mqttPort, '0.0.0.0', () => {
                 aedesStats( this._aedesServer );
-                self.status( IMqttServer.s.RUNNING ).then(( res ) => { self._listening( res ); })
+                self.status( IMqttServer.s.RUNNING ).then(( res ) => { self.v_listening( res ); })
                 resolve( true );
             });
         });
@@ -176,9 +209,10 @@ export class IMqttServer {
         const exports = this._instance.IFeatureProvider.api().exports();
         exports.Msg.debug( 'IMqttServer.fillConfig()' );
         let _filled = conf.IMqttServer;
-        if( !_filled.port ){
-            _filled.port = IMqttServer.d.port;
-        }
+
+        // build an URI if not already specified
+        this._fillConfigURI( _filled );
+
         // starting with v0.7.0, IMqttServer requires TLS connections
         // reading server key and cert files may also throw exceptions, which is acceptable here
         if( !_filled.certs || !_filled.certs.server || !_filled.certs.server.key || !_filled.certs.server.cert ){

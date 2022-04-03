@@ -9,6 +9,20 @@
             "type": "object",
             "description": "the configuration group, required to be present to try to run the IMqttServer",
             "properties": {
+                "uri": {
+                    "type": "string",
+                    "description": "the full URI of the broker"
+                },
+                "proto": {
+                    "type": "string",
+                    "description": "the MQTT preferred protocol",
+                    "default": "mqtts"
+                },
+                "host": {
+                    "type": "string",
+                    "description": "the hostname to use to connect to this message bus",
+                    "default": "localhost"
+                },
                 "port": {
                     "type": "integer",
                     "description": "the port number of the message bus",

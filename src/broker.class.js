@@ -118,13 +118,13 @@ export class coreBroker {
                 Interface.add( this, exports.IRunFile, {
                     v_runDir: this.irunfileRunDir
                 });
-                _promise = _promise.then(() => { Interface.fillConfig( this, 'IRunFile' ); });
+                return Interface.fillConfig( this, 'IRunFile' );
             })
             .then(() => {
                 Interface.add( this, exports.ITcpServer, {
                     v_listening: this.itcpserverListening
                 });
-                _promise = _promise.then(() => { Interface.fillConfig( this, 'ITcpServer' ); });
+                return Interface.fillConfig( this, 'ITcpServer' );
             })
             .then(() => { return Promise.resolve( this ); });
 
@@ -210,7 +210,7 @@ export class coreBroker {
                 .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() tcpServer created' ); })
                 .then(() => { this.IMqttServer.create( featCard.config().IMqttServer.port ); })
                 .then(() => { exports.Msg.debug( 'coreBroker.ifeatureproviderStart() mqttServer created' ); })
-                .then(() => { this.IMqttClient.advertise( featCard.config().IMqttClient ); })
+                .then(() => { this.IMqttClient.connects(); })
                 .then(() => { return new Promise(() => {}); });
         } else {
             return Promise.resolve( exports.IForkable.fork( name, cb, args ));
