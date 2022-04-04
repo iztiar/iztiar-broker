@@ -28,17 +28,13 @@
                     "description": "the port number of the message bus",
                     "default": 24003
                 },
-                "certs": {
+                "options": {
                     "type": "object",
-                    "description": "list of managed X509 certificates",
+                    "description": "options to be used when creating server",
                     "properties": {
-                        "rootCA": {
-                            "type": "string",
-                            "description": "path (relative to storageDir) to the root CA certificate"
-                        },
-                        "server": {
+                        "tls" : {
                             "type": "object",
-                            "description": "server key and certificate",
+                            "description": "create a TCP over TLS server",
                             "properties": {
                                 "cert": {
                                     "type": "string",
@@ -47,23 +43,6 @@
                                 "key": {
                                     "type": "string",
                                     "description": "path (relative to storageDir) to this server private key in PEM format"
-                                }
-                            }
-                        },
-                        "clients": {
-                            "type": "objects",
-                            "description": "the allowed client",
-                            "properties": {
-                                "rootCA": {
-                                    "type": "boolean",
-                                    "description": "whether to accept all certificates signed by our rootCA",
-                                    "default": "false"
-                                },
-                                "allowed": "array",
-                                "description": "list of allowed X509 client certificates",
-                                "properties": {
-                                    "clientCA": "string",
-                                    "description": "path (relative to storageDir) to the allowed client certificate"
                                 }
                             }
                         }

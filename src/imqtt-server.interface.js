@@ -32,7 +32,6 @@ export class IMqttServer {
     _mqttServer = null;
     _serverKey = null;
     _serverCert = null;
-    _rootCACert = null;
 
     // messaging port
     _mqttPort = null;
@@ -147,15 +146,14 @@ export class IMqttServer {
 
         // start mqtt aka messaging server
         if( !this._mqttServer ){
-            this._mqttServer = createServer( this._aedesServer, {
-                tls: {
-                    enableTrace: true,
-                    requestCert: true,
-                    ca: this._rootCACert,
-                    key: this._serverKey,
-                    cert: this._serverCert
-                }
-            });
+            let options = { ...this._instance.IFeatureProvider.feature().config().options };
+            options.tls = {
+                ...options.tls,
+                ca: this._instance.IFeatureProvider.api().config().core().rootCACert,
+                key: this._serverKey,
+                cert: this._serverCert,
+            };
+            this._mqttServer = createServer( this._aedesServer, options );
         }
 
         this._mqttServer
@@ -215,16 +213,14 @@ export class IMqttServer {
 
         // starting with v0.7.0, IMqttServer requires TLS connections
         // reading server key and cert files may also throw exceptions, which is acceptable here
-        if( !_filled.certs || !_filled.certs.server || !_filled.certs.server.key || !_filled.certs.server.cert ){
+        if( !_filled.options || !_filled.options.tls || !_filled.options.tls.key || !_filled.options.tls.cert ){
             throw new Error( 'IMqttServer requires both private key and certificate for the server' );
         }
-        this._serverKey = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.certs.server.key ));
-        this._serverCert = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.certs.server.cert ))
-        // at the moment, we consider that all managed certificate are signed by our own self-signed root CA
-        if( !_filled.certs.rootCA ){
-            throw new Error( 'root CA is not specified' );
+        if( !Object.keys( _filled.options.tls ).includes( 'requestCert' )){
+            _filled.options.tls.requestCert = true;
         }
-        this._rootCACert = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.certs.rootCA ))
+        this._serverKey = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.options.tls.key ));
+        this._serverCert = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.options.tls.cert ))
 
         return Promise.resolve( _filled );
     }
