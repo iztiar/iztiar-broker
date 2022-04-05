@@ -45,7 +45,7 @@ export class IMqttServer {
      * @returns {IMqttServer}
      */
     constructor( instance ){
-        const exports = instance.IFeatureProvider.api().exports();
+        const exports = instance.api().exports();
         exports.Msg.debug( 'IMqttServer instanciation' );
         this._instance = instance;
         this._status = IMqttServer.s.STOPPED;
@@ -60,7 +60,7 @@ export class IMqttServer {
     // @param {Object} conf this feature configuration
     // @returns {Promise} which resolves to provided conf
     _fillConfigURI( conf ){
-        const exports = this._instance.IFeatureProvider.api().exports();
+        const exports = this._instance.api().exports();
         let _promise = Promise.resolve( conf );
         // an URI may be specified, will be directly used by MQTT.connect()
         if( Object.keys( conf ).includes( 'uri' )){
@@ -90,7 +90,7 @@ export class IMqttServer {
     // @returns {Promise} which resolves to the status part for the IMqttServer
     _statusPart( instance ){
         const i = instance ? instance : this._instance;
-        i.IFeatureProvider.api().exports().Msg.debug( 'IMqttServer.statusPart()', 'instance '+( instance ? 'set':'unset' ));
+        i.api().exports().Msg.debug( 'IMqttServer.statusPart()', 'instance '+( instance ? 'set':'unset' ));
         const self = instance ? instance.IMqttServer : this;
         const a = {
             status: self._status,
@@ -118,7 +118,7 @@ export class IMqttServer {
      * [-implementation Api-]
      */
     v_listening( status ){
-        this._instance.IFeatureProvider.api().exports().Msg.debug( 'IMqttServer.v_listening()' );
+        this._instance.api().exports().Msg.debug( 'IMqttServer.v_listening()' );
     }
 
     /* *** ***************************************************************************************
@@ -133,7 +133,7 @@ export class IMqttServer {
      * [-public API-]
      */
     create( port ){
-        const Msg = this._instance.IFeatureProvider.api().exports().Msg;
+        const Msg = this._instance.api().exports().Msg;
         Msg.debug( 'IMqttServer.create()' );
         this.status( IMqttServer.s.STARTING );
         this._mqttPort = port;
@@ -146,10 +146,10 @@ export class IMqttServer {
 
         // start mqtt aka messaging server
         if( !this._mqttServer ){
-            let options = { ...this._instance.IFeatureProvider.feature().config().options };
+            let options = { ...this._instance.feature().config().options };
             options.tls = {
                 ...options.tls,
-                ca: this._instance.IFeatureProvider.api().config().core().rootCACert,
+                ca: this._instance.api().config().core().rootCACert,
                 key: this._serverKey,
                 cert: this._serverCert,
             };
@@ -177,7 +177,7 @@ export class IMqttServer {
      * @param {Error} e exception on MQTT server listening
      */
     errorHandler( e ){
-        const Msg = this._instance.IFeatureProvider.api().exports().Msg;
+        const Msg = this._instance.api().exports().Msg;
         Msg.debug( 'IMqttServer:errorHandler()' );
         if( e.stack ){
             Msg.error( 'IMqttServer:errorHandler()', e.name, e.message );
@@ -204,25 +204,26 @@ export class IMqttServer {
      * @throws {Error} if TLS properties are not here
      */
     fillConfig( conf ){
-        const exports = this._instance.IFeatureProvider.api().exports();
+        const api = this._instance.api();
+        const exports = api.exports();
         exports.Msg.debug( 'IMqttServer.fillConfig()' );
-        let _filled = conf.IMqttServer;
+        let _config = conf.IMqttServer;
 
         // build an URI if not already specified
-        this._fillConfigURI( _filled );
+        this._fillConfigURI( _config );
 
         // starting with v0.7.0, IMqttServer requires TLS connections
         // reading server key and cert files may also throw exceptions, which is acceptable here
-        if( !_filled.options || !_filled.options.tls || !_filled.options.tls.key || !_filled.options.tls.cert ){
+        if( !_config.options || !_config.options.tls || !_config.options.tls.key || !_config.options.tls.cert ){
             throw new Error( 'IMqttServer requires both private key and certificate for the server' );
         }
-        if( !Object.keys( _filled.options.tls ).includes( 'requestCert' )){
-            _filled.options.tls.requestCert = true;
+        if( !Object.keys( _config.options.tls ).includes( 'requestCert' )){
+            _config.options.tls.requestCert = true;
         }
-        this._serverKey = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.options.tls.key ));
-        this._serverCert = fs.readFileSync( path.join( exports.coreConfig.storageDir(), _filled.options.tls.cert ))
+        this._serverKey = fs.readFileSync( path.join( api.storageDir(), _config.options.tls.key ));
+        this._serverCert = fs.readFileSync( path.join( api.storageDir(), _config.options.tls.cert ))
 
-        return Promise.resolve( _filled );
+        return Promise.resolve( _config );
     }
 
     /**
@@ -231,7 +232,7 @@ export class IMqttServer {
      * @returns {Promise} which resolves to the status of this IMqttServer
      */
     status( newStatus ){
-        const Msg = this._instance.IFeatureProvider.api().exports().Msg;
+        const Msg = this._instance.api().exports().Msg;
         Msg.debug( 'IMqttServer.status()', 'status='+this._status, 'newStatus='+newStatus );
         if( newStatus && typeof newStatus === 'string' && newStatus.length && Object.values( IMqttServer.s ).includes( newStatus )){
             this._status = newStatus;
@@ -244,7 +245,7 @@ export class IMqttServer {
      * @returns {Promise} which resolves when the server is actually closed
      */
     terminate(){
-        const Msg = this._instance.IFeatureProvider.api().exports().Msg;
+        const Msg = this._instance.api().exports().Msg;
         Msg.debug( 'IMqttServer.terminate()' );
         this.status().then(( res ) => {
             if( res.status === IMqttServer.s.STOPPING ){

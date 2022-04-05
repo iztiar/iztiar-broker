@@ -14,5 +14,5 @@ import { coreBroker } from './imports.js';
 export default ( api, card ) => {
     //console.log( '@iztiar/iztiar-broker default exported function()' );
     //console.log( api );
-    return new coreBroker( api, card ).then(( o ) => { return o.IFeatureProvider; });
+    return new coreBroker( api, card );
 }
